@@ -2,27 +2,76 @@
 <html lang="zh-Hant">
 <head>
     <meta charset="UTF-8">
-    <title>醫療小助手</title>
+    <title>MedNav</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        /* 2. 給地圖一個固定的高度 */
+        #map { height: 400px; }
+        body { font-family: sans-serif; }
+    </style>
 </head>
 <body>
-    <h1>你好，請描述你的症狀</h1>
-    <input type="text" id="symptom-input" placeholder="例如：我牙痛了三天">
-    <button onclick="getSuggestion()">送出</button>
+    <h1>MedNav</h1>
+    <label for="city-select">選擇縣市:</label>
+    <select id="city-select">
+        <option value="臺北市北投區">臺北市北投區</option>
+        </select>
+
+    <label for="dept-input">輸入科別:</label>
+    <input type="text" id="dept-input" value="牙科一般科">
+
+    <button onclick="searchClinics()">搜尋</button>
     <hr>
-    <h2>初步建議：</h2>
-    <p id="result"></p>
+
+    <div id="map"></div>
+    <ul id="clinic-list"></ul>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
     <script>
-        async function getSuggestion() {
-            const symptom = document.getElementById('symptom-input').value;
-            const resultElement = document.getElementById('result');
+        // 5. 初始化地圖
+        // 將地圖中心設定在新北市政府的位置
+        const map = L.map('map').setView([25.014, 121.464], 13);
 
-            // 呼叫我們的後端 API
-            const response = await fetch(`http://127.0.0.1:5000/ask?symptom=${symptom}`);
-            const data = await response.json();
+        // 加入 OpenStreetMap 圖層
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        }).addTo(map);
 
-            // 將結果顯示在網頁上
-            resultElement.textContent = `根據你的描述「<span class="math-inline">\{data\.input\_symptom\}」，建議前往「</span>{data.suggested_department}」。`;
+        // 建立一個圖層群組來管理標記，方便之後一次性清除
+        let markerLayer = L.layerGroup().addTo(map);
+
+        async function searchClinics() {
+            const city = document.getElementById('city-select').value;
+            const department = document.getElementById('dept-input').value;
+            const listElement = document.getElementById('clinic-list');
+
+            // 清空上次的搜尋結果
+            listElement.innerHTML = '';
+            markerLayer.clearLayers();
+
+            // 呼叫後端 API
+            const response = await fetch(`http://127.0.0.1:5000/search?city=${city}&department=${department}`);
+            const clinics = await response.json();
+
+            // 6. 遍歷回傳的診所資料，並在地圖上加上標記
+            clinics.forEach(clinic => {
+                // 在列表顯示
+                const li = document.createElement('li');
+                li.textContent = `${clinic.機構名稱} - <span class="math-inline">\{clinic\.地址\} \(</span>{clinic.電話})`;
+                listElement.appendChild(li);
+
+                // 在地圖上加上標記
+                if (clinic.latitude && clinic.longitude) {
+                    const marker = L.marker([clinic.latitude, clinic.longitude]).addTo(markerLayer);
+                    marker.bindPopup(`<b><span class="math-inline">\{clinic\.機構名稱\}</b\><br\></span>{clinic.地址}`);
+                }
+            });
+
+            // 如果有結果，將地圖視圖移動到第一個結果的位置
+            if (clinics.length > 0) {
+                map.setView([clinics[0].latitude, clinics[0].longitude], 15);
+            }
         }
     </script>
 </body>

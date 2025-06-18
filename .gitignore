@@ -1,0 +1,17 @@
+# Python 虛擬環境
+venv/
+.venv/
+
+# Python 暫存檔
+__pycache__/
+*.pyc
+
+# VS Code 編輯器設定
+.vscode/
+
+# 作業系統檔案
+.DS_Store
+Thumbs.db
+
+# 環境變數檔 (如果未來有的話)
+.env
