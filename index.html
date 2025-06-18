@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <title>醫療小助手</title>
+</head>
+<body>
+    <h1>你好，請描述你的症狀</h1>
+    <input type="text" id="symptom-input" placeholder="例如：我牙痛了三天">
+    <button onclick="getSuggestion()">送出</button>
+    <hr>
+    <h2>初步建議：</h2>
+    <p id="result"></p>
+
+    <script>
+        async function getSuggestion() {
+            const symptom = document.getElementById('symptom-input').value;
+            const resultElement = document.getElementById('result');
+
+            // 呼叫我們的後端 API
+            const response = await fetch(`http://127.0.0.1:5000/ask?symptom=${symptom}`);
+            const data = await response.json();
+
+            // 將結果顯示在網頁上
+            resultElement.textContent = `根據你的描述「<span class="math-inline">\{data\.input\_symptom\}」，建議前往「</span>{data.suggested_department}」。`;
+        }
+    </script>
+</body>
+</html>
