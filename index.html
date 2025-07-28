@@ -2,90 +2,106 @@
 <html lang="zh-Hant">
 <head>
     <meta charset="UTF-8">
-    <title>MedNav</title>
+    <title>問醫生 - 智慧醫療導航</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-
     <style>
-        /* 2. 給地圖一個固定的高度 */
         #map { height: 450px; }
-        body { padding: 2rem; } /* 給整個頁面一些邊距 */
+        body { padding-top: 2rem; padding-bottom: 2rem; } 
     </style>
- 
-    
 </head>
 <body>
-    <div class="container mt-4">
-
-        <h1 class="mb-4 text-center">MedNav</h1>
-
+    <div class="container">
+        <h1 class="mb-4 text-center">問醫生 - 智慧醫療導航</h1>
         <div class="row g-3 align-items-end justify-content-center mb-4">
             <div class="col-md-4">
                 <label for="city-select" class="form-label">選擇縣市:</label>
                 <select id="city-select" class="form-select">
-                    <option value="臺北市北投區">臺北市北投區</option>
-                    <option value="新北市瑞芳區">新北市瑞芳區</option>
+                    <option value="臺北市">臺北市</option>
+                    <option value="新北市">新北市</option>
                 </select>
             </div>
             <div class="col-md-4">
-                <label for="dept-input" class="form-label">輸入科別:</label>
-                <input type="text" id="dept-input" class="form-control" value="牙科">
+                <label for="dept-select" class="form-label">選擇科別:</label>
+                <select id="dept-select" class="form-select">
+                    <option value="">載入中...</option>
+                </select>
             </div>
             <div class="col-md-auto">
                 <button onclick="searchClinics()" class="btn btn-primary w-100">搜尋</button>
             </div>
         </div>
-
         <hr>
-
         <div id="map"></div>
         <ul id="clinic-list" class="list-group mt-3 mb-5"></ul>
+    </div>
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     
     <script>
-        // 5. 初始化地圖
-        // 將地圖中心設定在新北市政府的位置
-        const map = L.map('map').setView([25.014, 121.464], 13);
-
-        // 加入 OpenStreetMap 圖層
+        // 初始化地圖
+        const map = L.map('map').setView([25.033, 121.565], 11);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
         }).addTo(map);
-
-        // 建立一個圖層群組來管理標記，方便之後一次性清除
         let markerLayer = L.layerGroup().addTo(map);
+
+        // 【新增】頁面載入時，自動執行的函式
+        document.addEventListener('DOMContentLoaded', function() {
+            // 獲取科別下拉選單的元素
+            const deptSelect = document.getElementById('dept-select');
+
+            // 使用 fetch 向後端的 /api/departments API 請求科別列表
+            fetch('http://127.0.0.1:5000/api/departments')
+                .then(response => response.json()) // 將回傳的 Response 物件轉成 JSON
+                .then(departments => {
+                    // 清空 "載入中..." 的選項
+                    deptSelect.innerHTML = ''; 
+
+                    // 遍歷從後端拿到的每一個科別
+                    departments.forEach(department => {
+                        // 建立一個新的 <option> 元素
+                        const option = document.createElement('option');
+                        option.value = department; // 選項的 value (送給後端的值)
+                        option.textContent = department; // 選項顯示的文字
+                        
+                        // 將建立好的選項加入到下拉選單中
+                        deptSelect.appendChild(option);
+                    });
+                })
+                .catch(error => {
+                    // 如果請求失敗，在選單顯示錯誤訊息
+                    console.error('無法載入科別列表:', error);
+                    deptSelect.innerHTML = '<option value="">載入科別失敗</option>';
+                });
+        });
 
         async function searchClinics() {
             const city = document.getElementById('city-select').value;
-            const department = document.getElementById('dept-input').value;
+            // 【修改】從新的下拉選單 #dept-select 獲取科別值
+            const department = document.getElementById('dept-select').value; 
             const listElement = document.getElementById('clinic-list');
-
-            // 清空上次的搜尋結果
+            
             listElement.innerHTML = '';
             markerLayer.clearLayers();
 
-            // 呼叫後端 API
             const response = await fetch(`http://127.0.0.1:5000/search?city=${city}&department=${department}`);
             const clinics = await response.json();
-
-            // 6. 遍歷回傳的診所資料，並在地圖上加上標記
+            
             clinics.forEach(clinic => {
-                // 在列表顯示
                 const li = document.createElement('li');
-                li.textContent = `${clinic.機構名稱} - <span class="math-inline">\{clinic\.地址\} \(</span>{clinic.電話})`;
+                li.className = 'list-group-item'; // 套用 Bootstrap 樣式
+                li.textContent = `${clinic.機構名稱} - ${clinic.地址}`;
                 listElement.appendChild(li);
 
-                // 在地圖上加上標記
                 if (clinic.latitude && clinic.longitude) {
                     const marker = L.marker([clinic.latitude, clinic.longitude]).addTo(markerLayer);
-                    marker.bindPopup(`<b><span class="math-inline">\{clinic\.機構名稱\}</b\><br\></span>{clinic.地址}`);
+                    marker.bindPopup(`<b>${clinic.機構名稱}</b><br>${clinic.地址}`);
                 }
             });
 
-            // 如果有結果，將地圖視圖移動到第一個結果的位置
             if (clinics.length > 0) {
-                map.setView([clinics[0].latitude, clinics[0].longitude], 15);
+                map.flyTo([clinics[0].latitude, clinics[0].longitude], 15);
             }
         }
     </script>
