@@ -8,7 +8,8 @@ def get_departments(input_file, output_file):
     try:
         print(f"reading '{input_file}' ...")
         df = pd.read_csv(input_file, encoding='utf-8-sig')
-        departments = df['科別'].str.split(',').explode().dropna().unique().tolist()
+        departments = df['科別'].str.split(',').explode().dropna().unique()
+        departments = departments[departments != ''].tolist()
 
         with open(output_file, 'w', encoding='utf-8') as f:
             json.dump(departments, f, ensure_ascii=False, indent=2)

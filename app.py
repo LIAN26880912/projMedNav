@@ -21,14 +21,12 @@ except Exception as e:
     df = pd.DataFrame()
 
 
+
 # --- API 端點 (Endpoints) ---
 
 # 【新增】建立一個專門提供科別列表的 API
 @app.route('/api/departments', methods=['GET'])
 def get_all_departments():
-    """
-    讀取 departments_list.json 檔案並將其內容以 JSON 格式回傳。
-    """
     try:
         with open('departments_list.json', 'r', encoding='utf-8') as f:
             departments_data = json.load(f)
@@ -39,19 +37,34 @@ def get_all_departments():
         return jsonify({"error": str(e)}), 500
 
 
+# 【新增】建立一個專門提供縣市與鄉鎮市區資料的 API
+@app.route('/api/districts', methods=['GET'])
+def get_all_districts():
+    """讀取 admin_districts.json 並回傳。"""
+    try:
+        # 您上傳的檔案名稱是 admin_districts.json
+        with open('admin_districts.json', 'r', encoding='utf-8') as f:
+            districts_data = json.load(f)
+        return jsonify(districts_data)
+    except FileNotFoundError:
+        return jsonify({"error": "找不到地區列表檔案 (admin_districts.json)"}), 404
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 # 【修正】搜尋診所的 API，採用新的「長表格」搜尋邏輯
 @app.route('/search', methods=['GET'])
 def search_clinic():
-    """
-    根據前端傳來的縣市和科別，搜尋符合條件的診所。
-    """
+    # 根據前端傳來的縣市和科別，搜尋符合條件的診所。
     # 【修正】將 'return' 改為 'request'
     department_query = request.args.get('department', '')
     city_query = request.args.get('city', '')
+    district_query = request.args.get('district', '')
     
     if df.empty or not department_query or not city_query:
         return jsonify({'error': '資料不完整或伺服器資料讀取失敗'}), 400
     
+    full_address_prefix = city_query + district_query
+
     # --- 【核心邏輯修正】改為在「科別」欄位中進行文字搜尋 ---
     
     # 1. 先依據地址前綴篩選縣市
@@ -76,7 +89,8 @@ def search_clinic():
     
     return jsonify(clinics)
 
+ 
 
 # --- 主程式執行區 ---
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(debug=True, port=5001)

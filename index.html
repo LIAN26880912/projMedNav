@@ -12,24 +12,34 @@
 </head>
 <body>
     <div class="container">
-        <h1 class="mb-4 text-center">問醫生 - 智慧醫療導航</h1>
+        <h1 class="mb-4 text-center">找醫生 - 智慧醫療導航</h1>
         <div class="row g-3 align-items-end justify-content-center mb-4">
-            <div class="col-md-4">
+            
+            <div class="col-md-3">
                 <label for="city-select" class="form-label">選擇縣市:</label>
                 <select id="city-select" class="form-select">
                     <option value="臺北市">臺北市</option>
                     <option value="新北市">新北市</option>
                 </select>
             </div>
-            <div class="col-md-4">
+                        <div class="col-md-3">
+                <label for="district-select" class="form-label">鄉鎮市區:</label>
+                <select id="district-select" class="form-select">
+                    <option value="">請先選擇縣市</option>
+                </select>
+            </div>
+
+            <div class="col-md-3">
                 <label for="dept-select" class="form-label">選擇科別:</label>
                 <select id="dept-select" class="form-select">
                     <option value="">載入中...</option>
                 </select>
             </div>
+
             <div class="col-md-auto">
                 <button onclick="searchClinics()" class="btn btn-primary w-100">搜尋</button>
             </div>
+            
         </div>
         <hr>
         <div id="map"></div>
@@ -46,52 +56,96 @@
         }).addTo(map);
         let markerLayer = L.layerGroup().addTo(map);
 
-        // 【新增】頁面載入時，自動執行的函式
+        let districtsData = {};
+
         document.addEventListener('DOMContentLoaded', function() {
-            // 獲取科別下拉選單的元素
-            const deptSelect = document.getElementById('dept-select');
+            loadDepartments();
+            loadDistricts();
+        });
 
+        const citySelect = document.getElementById('city-select');
+        const districtSelect = document.getElementById('district-select');
+        const deptSelect = document.getElementById('dept-select');
+
+        citySelect.addEventListener('change', function() {
+            updateDistrictOptions(this.value);
+        });
+
+
+        function loadDepartments(){
             // 使用 fetch 向後端的 /api/departments API 請求科別列表
-            fetch('http://127.0.0.1:5000/api/departments')
-                .then(response => response.json()) // 將回傳的 Response 物件轉成 JSON
+            fetch('http://127.0.0.1:5001/api/departments')
+                .then(response => response.json()) 
                 .then(departments => {
-                    // 清空 "載入中..." 的選項
                     deptSelect.innerHTML = ''; 
-
-                    // 遍歷從後端拿到的每一個科別
                     departments.forEach(department => {
-                        // 建立一個新的 <option> 元素
                         const option = document.createElement('option');
                         option.value = department; // 選項的 value (送給後端的值)
                         option.textContent = department; // 選項顯示的文字
-                        
-                        // 將建立好的選項加入到下拉選單中
                         deptSelect.appendChild(option);
                     });
                 })
                 .catch(error => {
-                    // 如果請求失敗，在選單顯示錯誤訊息
                     console.error('無法載入科別列表:', error);
                     deptSelect.innerHTML = '<option value="">載入科別失敗</option>';
                 });
-        });
+        }
+        function loadDistricts() {
+            // 【修正】改用相對路徑
+            fetch('http://127.0.0.1:5001/api/districts')
+                .then(response => response.json())
+                .then(data => {
+                    districtsData = data;
+                    const cities = Object.keys(districtsData);
+                    
+                    citySelect.innerHTML = '<option value="">請選擇縣市</option>';
+                    cities.forEach(city => {
+                        const option = document.createElement('option');
+                        option.value = city;
+                        option.textContent = city;
+                        citySelect.appendChild(option);
+                    });
+                    
+                    if (cities.length > 0) {
+                        citySelect.value = cities[0];
+                        updateDistrictOptions(cities[0]);
+                    }
+                })
+                .catch(error => {
+                    console.error('無法載入地區列表:', error);
+                    citySelect.innerHTML = '<option value="">載入失敗</option>';
+                });
+        }
 
+        function updateDistrictOptions(selectedCity) {
+            const districts = districtsData[selectedCity] || [];
+            districtSelect.innerHTML = '<option value="">全部</option>';
+            districts.forEach(district => {
+                const option = document.createElement('option');
+                option.value = district;
+                option.textContent = district;
+                districtSelect.appendChild(option);
+            });
+        }
+
+        
         async function searchClinics() {
-            const city = document.getElementById('city-select').value;
-            // 【修改】從新的下拉選單 #dept-select 獲取科別值
-            const department = document.getElementById('dept-select').value; 
+            const city = citySelect.value;
+            const district = districtSelect.value;
+            const department = deptSelect.value; 
             const listElement = document.getElementById('clinic-list');
             
             listElement.innerHTML = '';
             markerLayer.clearLayers();
 
-            const response = await fetch(`http://127.0.0.1:5000/search?city=${city}&department=${department}`);
+            const response = await fetch(`http://127.0.0.1:5001/search?city=${city}&district=${district}&department=${department}`);
             const clinics = await response.json();
             
             clinics.forEach(clinic => {
                 const li = document.createElement('li');
-                li.className = 'list-group-item'; // 套用 Bootstrap 樣式
-                li.textContent = `${clinic.機構名稱} - ${clinic.地址}`;
+                li.className = 'list-group-item';
+                const phone = clinic.電話 ? `(${clinic.電話})` : '';
+                li.textContent = `${clinic.機構名稱} - ${clinic.地址} ${phone}`;
                 listElement.appendChild(li);
 
                 if (clinic.latitude && clinic.longitude) {
