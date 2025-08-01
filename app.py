@@ -2,9 +2,12 @@ import pandas as pd
 import json
 from flask import Flask, jsonify, request
 from flask_cors import CORS
+import numpy as np
 
 app = Flask(__name__)
 CORS(app)
+
+app.config['JSON_AS_ASCII'] = False
 
 # --- 資料載入 ---
 try:
@@ -58,20 +61,28 @@ def search_clinic():
     
     full_address_prefix = city_query + district_query
 
-    result_df = df[df['縣市區名'].str.contains(full_address_prefix, na=False)].copy()
+    result_df = df[df['縣市區名'].str.startswith(full_address_prefix, na=False)].copy()
     result_df = result_df[result_df['科別'].str.contains(department_query, na=False)]
 
     if not result_df.empty:
         result_df = result_df.dropna(subset=['latitude', 'longitude'])
     
     if not result_df.empty:
-        clinics = result_df[['機構名稱', '地址', '電話', 'latitude', 'longitude']].head(20).to_dict('records')
+        result_df[result_df.isna()]
+        clinics = (result_df[['機構名稱', '地址', '電話', 'latitude', 'longitude']]
+            .head(100)
+            .replace({
+                '地址': {np.nan: '未提供地址', '': '未提供地址'}, 
+                '電話': {np.nan: '未提供電話', '': '未提供電話'}})
+            .to_dict('records')
+        )
 
     else:
         clinics = []
     
     print(f"查詢: {full_address_prefix} - {department_query}，找到 {len(clinics)} 筆資料。")
-    
+
+   
     return jsonify(clinics)
 
  

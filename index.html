@@ -8,6 +8,11 @@
     <style>
         #map { height: 450px; }
         body { padding-top: 2rem; padding-bottom: 2rem; } 
+        /* 【新增】讓列表項目在滑鼠移過時，顯示為可點擊的手指圖示 */
+        .list-group-item:hover {
+            background-color: #f8f9fa;
+            cursor: pointer;
+        }
     </style>
 </head>
 <body>
@@ -24,7 +29,7 @@
             <div class="col-md-3">
                 <label for="district-select" class="form-label">鄉鎮市區:</label>
                 <select id="district-select" class="form-select">
-                    <option value="">請先選擇縣市</option>
+                    <option value="">載入中...</option>
                 </select>
             </div>
             <div class="col-md-3">
@@ -55,6 +60,7 @@
         let markerLayer = L.layerGroup().addTo(map);
 
         let districtsData = {};
+        let markers = [];
 
         document.addEventListener('DOMContentLoaded', function() {
             loadDepartments();
@@ -77,8 +83,8 @@
                     deptSelect.innerHTML = ''; 
                     departments.forEach(department => {
                         const option = document.createElement('option');
-                        option.value = department; // 選項的 value (送給後端的值)
-                        option.textContent = department; // 選項顯示的文字
+                        option.value = department; 
+                        option.textContent = department; 
                         deptSelect.appendChild(option);
                     });
                 })
@@ -133,6 +139,7 @@
             
             listElement.innerHTML = '';
             markerLayer.clearLayers();
+            markers = []; // 【新增】每次搜尋前，清空標記陣列
 
             const response = await fetch(`http://127.0.0.1:5001/search?city=${city}&district=${district}&department=${department}`);
             const clinics = await response.json();
@@ -145,21 +152,52 @@
                 return;
             }
 
-            clinics.forEach(clinic => {
-                const li = document.createElement('li');
-                li.className = 'list-group-item';
-                const phone = clinic.電話 ? `(${clinic.電話})` : '';
-                li.textContent = `${clinic.機構名稱} - ${clinic.地址} ${phone}`;
-                listElement.appendChild(li);
+            try{
+                clinics.forEach((clinic, index) => {
+                    const li = document.createElement('li');
+                    li.className = 'list-group-item';
 
-                if (clinic.latitude && clinic.longitude) {
-                    const marker = L.marker([clinic.latitude, clinic.longitude]).addTo(markerLayer);
-                    marker.bindPopup(`<b>${clinic.機構名稱}</b><br>${clinic.地址}`);
-                }
-            });
+                    // 【核心修正】對所有可能不存在的資料進行防禦性檢查
+                    const name = clinic.機構名稱;
+                    const address = clinic.地址;
+                    const phone = clinic.電話;
 
-            if (clinics.length > 0) {
-                map.flyTo([clinics[0].latitude, clinics[0].longitude], 15);
+                    li.textContent = `${name} - ${address} ${phone}`;
+                    
+                    li.dataset.markerIndex = index;
+
+                    li.addEventListener('click', function() {
+                        const markerIndex = this.dataset.markerIndex;
+                        const targetMarker = markers[markerIndex];
+                        if (targetMarker) {
+                            map.flyTo(targetMarker.getLatLng(), 16);
+                            targetMarker.openPopup();
+                        }
+                    });
+
+                    listElement.appendChild(li);
+
+                    if (clinic.latitude && clinic.longitude) {
+                        const marker = L.marker([clinic.latitude, clinic.longitude]).addTo(markerLayer);
+                        // 【核心修正】在資訊窗中也使用更安全的變數
+                        marker.bindPopup(`<b>${name}</b><br>${address}<br>電話: ${phone || '無'}`);
+                        markers.push(marker);
+                    } else {
+                        markers.push(null);
+                    }
+                });
+            }
+            catch (e) {
+                console.error("在處理診所列表時發生錯誤:", e);
+                listElement.innerHTML = '<li class="list-group-item text-danger">處理結果時發生錯誤，請查看主控台。</li>';
+            }
+
+            // 【核心修正】移除 setTimeout，直接執行縮放
+            const addedMarkersCount = markerLayer.getLayers().length;
+            if (addedMarkersCount > 1) {
+                map.flyToBounds(markerLayer.getBounds(), { padding: [50, 50] });
+            } else if (addedMarkersCount === 1) {
+                map.flyTo(markerLayer.getLayers()[0].getLatLng(), 16);
             }
         }
     </script>
