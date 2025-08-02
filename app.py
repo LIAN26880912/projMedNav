@@ -6,8 +6,23 @@ import numpy as np
 
 app = Flask(__name__)
 CORS(app)
-
 app.config['JSON_AS_ASCII'] = False
+
+
+# --- Helper Function ---
+def haversine_distance(lat1, lon1, lat2, lon2):
+    """計算兩個經緯度座標之間的直線距離（公里）"""
+    R = 6371  # 地球半徑（公里）
+    
+    dLat = radians(lat2 - lat1)
+    dLon = radians(lon2 - lon1)
+    lat1 = radians(lat1)
+    lat2 = radians(lat2)
+    
+    a = sin(dLat/2)**2 + cos(lat1) * cos(lat2) * sin(dLon/2)**2
+    c = 2 * atan2(sqrt(a), sqrt(1-a))
+    
+    return R * c
 
 # --- 資料載入 ---
 try:
@@ -83,6 +98,42 @@ def search_clinic():
     print(f"查詢: {full_address_prefix} - {department_query}，找到 {len(clinics)} 筆資料。")
 
    
+    return jsonify(clinics)
+
+# 【新增】以座標為中心的半徑搜尋 API
+@app.route('/search/nearby', methods=['GET'])
+def search_nearby_clinics():
+    """根據使用者座標、半徑、科別，搜尋附近的診所。"""
+    try:
+        user_lat = float(request.args.get('lat'))
+        user_lon = float(request.args.get('lon'))
+        radius_km = float(request.args.get('radius', 1)) # 預設半徑 1 公里
+        department_query = request.args.get('department', '')
+    except (TypeError, ValueError):
+        return jsonify({'error': '緯度、經度與半徑必須是有效的數字'}), 400
+
+    if df.empty or not department_query:
+        return jsonify({'error': '科別為必填欄位'}), 400
+
+    # 1. 計算每家診所與使用者之間的距離
+    distances = df.apply(
+        lambda row: haversine_distance(user_lat, user_lon, row['latitude'], row['longitude']),
+        axis=1
+    )
+    
+    # 2. 篩選出在半徑內的診所
+    nearby_df = df[distances <= radius_km].copy()
+    
+    # 3. 在半徑內的結果中，再篩選科別
+    result_df = nearby_df[nearby_df['科別'].str.contains(department_query, na=False)]
+
+    # 4. 準備回傳資料
+    if not result_df.empty:
+        clinics = result_df[['機構名稱', '地址', '電話', 'latitude', 'longitude']].to_dict('records')
+    else:
+        clinics = []
+        
+    print(f"附近查詢: ({user_lat}, {user_lon}) 半徑 {radius_km}km - {department_query}，找到 {len(clinics)} 筆資料。")
     return jsonify(clinics)
 
  
