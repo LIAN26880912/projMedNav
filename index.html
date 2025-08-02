@@ -48,14 +48,14 @@
                         </select>
                     </div>
                     <div class="col-md-3">
-                        <label for="dept-select" class="form-label">選擇科別:</label>
-                        <select id="dept-select" class="form-select">
+                        <label for="dept-select-area" class="form-label">選擇科別:</label>
+                        <select id="dept-select-area" class="form-select">
                             <option value="">載入中... </option>
                         </select>
                     </div>
 
                     <div class="col-md-auto">
-                        <button onclick="searchClinics()" class="btn btn-primary w-100">搜尋</button>
+                        <button onclick="searchClinicsByArea()" class="btn btn-primary w-100">搜尋</button>
                     </div>
                     
                 </div>
@@ -85,7 +85,6 @@
             attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
         }).addTo(map);
         let markerLayer = L.featureGroup().addTo(map);
-
         let districtsData = {};
         let markers = [];
 
@@ -96,28 +95,29 @@
 
         const citySelect = document.getElementById('city-select');
         const districtSelect = document.getElementById('district-select');
-        const deptSelect = document.getElementById('dept-select');
+        const deptSelectArea = document.getElementById('dept-select-area');
+        const deptSelectNearby = document.getElementById('dept-select-nearby');
+        const radiusSelect = document.getElementById('radius-select');
 
-        citySelect.addEventListener('change', function() {
-            updateDistrictOptions(this.value);
-        });
+        citySelect.addEventListener('change', e => updateDistrictOptions(e.target.value));
 
 
         function loadDepartments(){
             fetch('http://127.0.0.1:5001/api/departments')
                 .then(response => response.json()) 
-                .then(departments => {
-                    deptSelect.innerHTML = ''; 
-                    departments.forEach(department => {
-                        const option = document.createElement('option');
-                        option.value = department; 
-                        option.textContent = department; 
-                        deptSelect.appendChild(option);
+                .then(depts => {
+                    [deptSelectArea, deptSelectNearby].forEach(select => {
+                        select.innerHTML = '';
+                        depts.forEach(d => {
+                            const opt = document.createElement('option');
+                            opt.value = opt.textContent = d;
+                            select.appendChild(opt);
+                        });
                     });
                 })
                 .catch(error => {
                     console.error('無法載入科別列表:', error);
-                    deptSelect.innerHTML = '<option value="">載入科別失敗</option>';
+                    select.innerHTML = '<option value="">載入失敗</option>';
                 });
         }
         function loadDistricts() {
@@ -126,15 +126,12 @@
                 .then(data => {
                     districtsData = data;
                     const cities = Object.keys(districtsData);
-                    
                     citySelect.innerHTML = '<option value="">請選擇縣市</option>';
-                    cities.forEach(city => {
-                        const option = document.createElement('option');
-                        option.value = city;
-                        option.textContent = city;
-                        citySelect.appendChild(option);
+                    cities.forEach(c => {
+                        const opt = document.createElement('option');
+                        opt.value = opt.textContent = c;
+                        citySelect.appendChild(opt);
                     });
-                    
                     if (cities.length > 0) {
                         citySelect.value = cities[0];
                         updateDistrictOptions(cities[0]);
@@ -150,27 +147,52 @@
             const districts = districtsData[selectedCity] || [];
             districtSelect.innerHTML = '<option value="">全部</option>';
             districts.forEach(district => {
-                const option = document.createElement('option');
-                option.value = district;
-                option.textContent = district;
-                districtSelect.appendChild(option);
+                const opt = document.createElement('option');
+                opt.value = opt.textContent = district;
+                districtSelect.appendChild(opt);
+            });
+        }
+        
+        function searchClinicsByArea() {
+            const city = citySelect.value;
+            const district = districtSelect.value;
+            const department = deptSelectArea.value; 
+            const url = `http://127.0.0.1:5001/search?city=${city}&district=${district}&department=${department}`;
+            fetchAndDisplayClinics(url);
+        }
+
+        function searchClinicsNearby() {
+            if (!navigator.geolocation) {
+                alert('您的瀏覽器不支援地理位置功能。');
+                return;
+            }
+            navigator.geolocation.getCurrentPosition(position => {
+                const lat = position.coords.latitude;
+                const lon = position.coords.longitude;
+                const radius = radiusSelect.value;
+                const department = deptSelectNearby.value;
+                const url = `http://127.0.0.1:5001/search/nearby?lat=${lat}&lon=${lon}&radius=${radius}&department=${department}`;
+                
+                // 在地圖上標示使用者位置
+                L.circle([lat, lon], { radius: 200, color: 'blue', fillColor: '#3388ff', fillOpacity: 0.3 }).addTo(markerLayer);
+                L.marker([lat, lon]).addTo(markerLayer).bindPopup('您的目前位置').openPopup();
+
+                fetchAndDisplayClinics(url);
+            }, () => {
+                alert('無法取得您的位置，請確認已授權瀏覽器讀取位置資訊。');
             });
         }
 
-        
-        async function searchClinics() {
-            const city = citySelect.value;
-            const district = districtSelect.value;
-            const department = deptSelect.value; 
+        async function fetchAndDisplayClinics(url) {
             const listElement = document.getElementById('clinic-list');
-            
-            listElement.innerHTML = '';
+            listElement.innerHTML = '<li class="list-group-item">搜尋中...</li>';
             markerLayer.clearLayers();
-            markers = []; // 【新增】每次搜尋前，清空標記陣列
+            markers = []; 
 
-            const response = await fetch(`http://127.0.0.1:5001/search?city=${city}&district=${district}&department=${department}`);
+            const response = await fetch(url);
             const clinics = await response.json();
-            
+
+            listElement.innerHTML = '';
             if (clinics.length === 0) {
                 const li = document.createElement('li');
                 li.className = 'list-group-item text-muted';
@@ -181,27 +203,21 @@
 
             try{
                 clinics.forEach((clinic, index) => {
-                    const li = document.createElement('li');
-                    li.className = 'list-group-item';
-
-                    // 【核心修正】對所有可能不存在的資料進行防禦性檢查
                     const name = clinic.機構名稱;
                     const address = clinic.地址;
                     const phone = clinic.電話;
 
+                    const li = document.createElement('li');
+                    li.className = 'list-group-item';
                     li.textContent = `${name} - ${address} ${phone}`;
-                    
                     li.dataset.markerIndex = index;
-
                     li.addEventListener('click', function() {
-                        const markerIndex = this.dataset.markerIndex;
-                        const targetMarker = markers[markerIndex];
+                        const targetMarker = markers[this.dataset.markerIndex];
                         if (targetMarker) {
                             map.flyTo(targetMarker.getLatLng(), 16);
                             targetMarker.openPopup();
                         }
                     });
-
                     listElement.appendChild(li);
 
                     if (clinic.latitude && clinic.longitude) {
@@ -219,7 +235,6 @@
                 listElement.innerHTML = '<li class="list-group-item text-danger">處理結果時發生錯誤，請查看主控台。</li>';
             }
 
-            // 【核心修正】移除 setTimeout，直接執行縮放
             const addedMarkersCount = markerLayer.getLayers().length;
             if (addedMarkersCount > 1) {
                 map.flyToBounds(markerLayer.getBounds(), { padding: [50, 50] });

@@ -1,5 +1,6 @@
 import pandas as pd
 import json
+from math import radians, sin, cos, sqrt, atan2
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 import numpy as np
@@ -120,16 +121,20 @@ def search_nearby_clinics():
         lambda row: haversine_distance(user_lat, user_lon, row['latitude'], row['longitude']),
         axis=1
     )
-    
     # 2. 篩選出在半徑內的診所
     nearby_df = df[distances <= radius_km].copy()
-    
     # 3. 在半徑內的結果中，再篩選科別
     result_df = nearby_df[nearby_df['科別'].str.contains(department_query, na=False)]
-
     # 4. 準備回傳資料
     if not result_df.empty:
-        clinics = result_df[['機構名稱', '地址', '電話', 'latitude', 'longitude']].to_dict('records')
+        result_df[result_df.isna()]
+        clinics = (result_df[['機構名稱', '地址', '電話', 'latitude', 'longitude']]
+            .head(100)
+            .replace({
+                '地址': {np.nan: '未提供地址', '': '未提供地址'}, 
+                '電話': {np.nan: '未提供電話', '': '未提供電話'}})
+            .to_dict('records')
+        )
     else:
         clinics = []
         
