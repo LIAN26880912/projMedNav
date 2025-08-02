@@ -84,7 +84,9 @@
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
         }).addTo(map);
-        let markerLayer = L.featureGroup().addTo(map);
+        let clinicMarkerLayer = L.featureGroup().addTo(map);
+        let userMarkerLayer = L.featureGroup().addTo(map);
+
         let districtsData = {};
         let markers = [];
 
@@ -174,8 +176,9 @@
                 const url = `http://127.0.0.1:5001/search/nearby?lat=${lat}&lon=${lon}&radius=${radius}&department=${department}`;
                 
                 // 在地圖上標示使用者位置
-                L.circle([lat, lon], { radius: 200, color: 'blue', fillColor: '#3388ff', fillOpacity: 0.3 }).addTo(markerLayer);
-                L.marker([lat, lon]).addTo(markerLayer).bindPopup('您的目前位置').openPopup();
+                userMarkerLayer.clearLayers();
+                L.circle([lat, lon], { radius: 200, color: 'blue', fillColor: '#3388ff', fillOpacity: 0.3 }).addTo(userMarkerLayer);
+                L.marker([lat, lon]).addTo(userMarkerLayer).bindPopup('您的目前位置').openPopup();
 
                 fetchAndDisplayClinics(url);
             }, () => {
@@ -186,7 +189,7 @@
         async function fetchAndDisplayClinics(url) {
             const listElement = document.getElementById('clinic-list');
             listElement.innerHTML = '<li class="list-group-item">搜尋中...</li>';
-            markerLayer.clearLayers();
+            clinicMarkerLayer.clearLayers();
             markers = []; 
 
             const response = await fetch(url);
@@ -198,6 +201,9 @@
                 li.className = 'list-group-item text-muted';
                 li.textContent = '找不到符合條件的醫療院所。';
                 listElement.appendChild(li);
+                if (isNearbySearch) {
+                    map.flyTo(userMarkerLayer.getBounds().getCenter(), 15);
+                }
                 return;
             }
 
@@ -221,7 +227,7 @@
                     listElement.appendChild(li);
 
                     if (clinic.latitude && clinic.longitude) {
-                        const marker = L.marker([clinic.latitude, clinic.longitude]).addTo(markerLayer);
+                        const marker = L.marker([clinic.latitude, clinic.longitude]).addTo(clinicMarkerLayer);
                         // 【核心修正】在資訊窗中也使用更安全的變數
                         marker.bindPopup(`<b>${name}</b><br>${address}<br>電話: ${phone || '無'}`);
                         markers.push(marker);
@@ -235,11 +241,12 @@
                 listElement.innerHTML = '<li class="list-group-item text-danger">處理結果時發生錯誤，請查看主控台。</li>';
             }
 
-            const addedMarkersCount = markerLayer.getLayers().length;
+            const allMarkers = L.featureGroup([...clinicMarkerLayer.getLayers(), ...userMarkerLayer.getLayers()]);
+            const addedMarkersCount = allMarkers.getLayers().length;
             if (addedMarkersCount > 1) {
-                map.flyToBounds(markerLayer.getBounds(), { padding: [50, 50] });
+                map.flyToBounds(allMarkers.getBounds(), { padding: [50, 50] });
             } else if (addedMarkersCount === 1) {
-                map.flyTo(markerLayer.getLayers()[0].getLatLng(), 16);
+                map.flyTo(allMarkers.getLayers()[0].getLatLng(), 16);
             }
         }
     </script>
