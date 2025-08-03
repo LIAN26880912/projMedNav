@@ -18,14 +18,15 @@ def clean_address(address):
 # --- 設定區 ---
 GOOGLE_API_URL = "https://maps.googleapis.com/maps/api/geocode/json"
 API_KEY = "AIzaSyC3VT6ZucjBzT-LsEn-UQGJWB7xeb_6Csg" 
-input_filename = '醫療機構與人員基本資料_20231231.csv'
-output_filename = 'medical_data_geocoded.csv'
+inputFilename = '醫療機構與人員基本資料_20231231.csv'
+outputFilename = 'medical_data_geocoded.csv'
+processArea = '新北市瑞芳區'
 
 
 def get_geocode():
 
-    print(f"正在讀取資料: {input_filename}")
-    df = pd.read_csv(input_filename)
+    print(f"正在讀取資料: {inputFilename}")
+    df = pd.read_csv(inputFilename)
 
     if 'latitude' not in df.columns:
         df['latitude'] = None
@@ -33,9 +34,9 @@ def get_geocode():
         df['longitude'] = None
         
     df_to_process = df[df['latitude'].isna() & df['longitude'].isna()].copy()
-    df_to_process = df_to_process[df_to_process['縣市區名'] == '臺北市北投區']
+    df_to_process = df_to_process[df_to_process['縣市區名'] == processArea]
     total_rows = len(df_to_process)
-    print(f"將處理 {total_rows} 筆臺北市北投區的資料...")
+    print(f"將處理 {total_rows} 筆 {processArea} 的資料...")
 
     if total_rows == 0:
         print("所有醫療院所皆已有經緯度資料，無需處理。")
@@ -110,8 +111,8 @@ def get_geocode():
                     print(f"發生未知錯誤: {e}")
                     break # 發生其他錯誤就直接放棄
                 """
-        print(f"\n地理編碼完成，正在儲存至 {output_filename}")
-        df.to_csv(output_filename, index=False, encoding='utf-8-sig')
+        print(f"\n地理編碼完成，正在儲存至 {outputFilename}")
+        df.to_csv(outputFilename, index=False, encoding='utf-8-sig')
         print("檔案儲存成功！")
 
 if __name__ == "__main__":

@@ -38,7 +38,14 @@ except Exception as e:
     print(f"讀取 CSV 時發生未知錯誤: {e}")
     df = pd.DataFrame()
 
-
+# 【新增】在伺服器啟動時，載入症狀對照表
+try:
+    with open('symptom_map.json', 'r', encoding='utf-8') as f:
+        symptom_map = json.load(f)
+    print("成功載入症狀對照表！")
+except Exception as e:
+    print(f"讀取 symptom_map.json 時發生錯誤: {e}")
+    symptom_map = {}
 
 # --- API 端點 (Endpoints) ---
 
@@ -65,6 +72,28 @@ def get_all_districts():
         return jsonify({"error": "找不到地區列表檔案 (admin_districts.json)"}), 404
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+# 【新增】依症狀推薦科別的 API
+@app.route('/api/suggest-department', methods=['POST'])
+def suggest_department():
+    """根據使用者輸入的症狀描述，推薦可能的科別"""
+    if not symptom_map:
+        return jsonify({"error": "症狀資料庫未載入"}), 500
+        
+    data = request.get_json()
+    symptom_text = data.get('symptoms', '')
+    if not symptom_text:
+        return jsonify({'departments': []})
+
+    # 找出所有匹配的科別
+    found_departments = set() # 使用 set 來自動處理重複的科別
+    for symptom_keyword, department in symptom_map.items():
+        if symptom_keyword in symptom_text:
+            found_departments.add(department)
+    
+    return jsonify({'departments': list(found_departments)})
+
+
 
 @app.route('/search', methods=['GET'])
 def search_clinic():

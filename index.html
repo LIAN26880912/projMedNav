@@ -19,21 +19,35 @@
     <div class="container">
         <h1 class="mb-4 text-center">找醫生 - 智慧醫療導航</h1>
 
-        <!-- 【新增】切換搜尋模式的頁籤 -->
         <ul class="nav nav-tabs mb-3" id="searchTabs" role="tablist">
+            <!-- 【新增】依症狀推薦頁籤 -->
             <li class="nav-item" role="presentation">
-                <button class="nav-link active" id="area-search-tab" data-bs-toggle="tab" data-bs-target="#area-search" type="button" role="tab">依地區搜尋</button>
+                <button class="nav-link active" id="symptom-search-tab" data-bs-toggle="tab" data-bs-target="#symptom-search" type="button" role="tab">1. 依症狀推薦</button>
             </li>
             <li class="nav-item" role="presentation">
-                <button class="nav-link" id="nearby-search-tab" data-bs-toggle="tab" data-bs-target="#nearby-search" type="button" role="tab">搜尋我附近</button>
+                <button class="nav-link" id="area-search-tab" data-bs-toggle="tab" data-bs-target="#area-search" type="button" role="tab">2. 依地區搜尋</button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="nearby-search-tab" data-bs-toggle="tab" data-bs-target="#nearby-search" type="button" role="tab">3. 搜尋我附近</button>
             </li>
         </ul>
 
 
         <!-- 【新增】頁籤內容 -->
         <div class="tab-content" id="searchTabsContent">
+            
+            <!-- 【新增】依症狀推薦內容 -->
+            <div class="tab-pane fade show active" id="symptom-search" role="tabpanel">
+                <div class="mb-3">
+                    <label for="symptom-input" class="form-label">請簡單描述您的症狀</label>
+                    <textarea class="form-control" id="symptom-input" rows="3" placeholder="例如: 我喉嚨痛而且有點發燒..."></textarea>
+                </div>
+                <button onclick="suggestDepartment()" class="btn btn-info">分析症狀並推薦科別</button>
+                <div id="suggestion-result" class="mt-3"></div>
+            </div>
+
             <!-- 地區搜尋 -->
-            <div class="tab-pane fade show active" id="area-search" role="tabpanel">
+            <div class="tab-pane fade" id="area-search" role="tabpanel">
                 <div class="row g-3 align-items-end justify-content-center mb-4">
                     <div class="col-md-3">
                         <label for="city-select" class="form-label">選擇縣市:</label>
@@ -100,6 +114,8 @@
         const deptSelectArea = document.getElementById('dept-select-area');
         const deptSelectNearby = document.getElementById('dept-select-nearby');
         const radiusSelect = document.getElementById('radius-select');
+        const symptomInput = document.getElementById('symptom-input');
+        const suggestionResult = document.getElementById('suggestion-result');
 
         citySelect.addEventListener('change', e => updateDistrictOptions(e.target.value));
 
@@ -153,6 +169,38 @@
                 opt.value = opt.textContent = district;
                 districtSelect.appendChild(opt);
             });
+        }
+
+
+        // 【新增】分析症狀並推薦科別的函式
+        async function suggestDepartment() {
+            const symptoms = symptomInput.value;
+            if (!symptoms.trim()) {
+                suggestionResult.innerHTML = `<div class="alert alert-warning">請輸入您的症狀描述。</div>`;
+                return;
+            }
+
+            suggestionResult.innerHTML = `<div class="alert alert-info">正在分析中...</div>`;
+
+            const response = await fetch('http://127.0.0.1:5001/api/suggest-department', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ symptoms: symptoms })
+            });
+            const data = await response.json();
+
+            if (data.departments && data.departments.length > 0) {
+                const recommendedDept = data.departments[0];
+                suggestionResult.innerHTML = `<div class="alert alert-success">根據您的描述，建議您可以前往「<b>${recommendedDept}</b>」。已為您自動選擇科別，請至「依地區搜尋」頁籤選擇地區並搜尋診所。</div>`;
+                
+                // 自動設定科別並切換頁籤
+                deptSelectArea.value = recommendedDept;
+                const areaSearchTab = new bootstrap.Tab(document.getElementById('area-search-tab'));
+                areaSearchTab.show();
+
+            } else {
+                suggestionResult.innerHTML = `<div class="alert alert-danger">無法根據您的描述找到對應的科別，建議您直接從「依地區搜尋」選擇「家庭醫學科」或「西醫一般科」進行諮詢。</div>`;
+            }
         }
         
         function searchClinicsByArea() {
