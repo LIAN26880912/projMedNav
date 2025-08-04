@@ -21,7 +21,7 @@ GOOGLE_API_URL = "https://maps.googleapis.com/maps/api/geocode/json"
 API_KEY = "AIzaSyC3VT6ZucjBzT-LsEn-UQGJWB7xeb_6Csg" 
 inputFilename = '醫療機構與人員基本資料_20231231.csv'
 outputFilename = 'medical_data_geocoded.csv'
-processArea = '新北市瑞芳區'
+processArea = '連江縣'
 
 
 def get_geocode():
@@ -43,7 +43,7 @@ def get_geocode():
         else:
             df[col] = pd.to_numeric(df[col], errors='coerce')
     
-    is_in_area = df['縣市區名'] == processArea
+    is_in_area = df['縣市區名'].str.startswith(processArea)
     is_missing_coords = df['latitude'].isnull() | df['longitude'].isnull()
     df_to_process = df[is_in_area & is_missing_coords].copy()
 
