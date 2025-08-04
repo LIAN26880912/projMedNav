@@ -8,115 +8,77 @@
     <style>
         #map { height: 450px; }
         body { padding-top: 2rem; padding-bottom: 2rem; } 
-        .list-group-item:hover {
-            background-color: #f8f9fa;
-            cursor: pointer;
+        .list-group-item:hover { background-color: #f8f9fa; cursor: pointer;}
+        .symptom-btn-group .btn { margin-right: 0.5rem; margin-bottom: 0.5rem;}
+        .map-click-mode { cursor: crosshair !important;}
+        /* 【新增】讓第二層在未啟用時呈現半透明且不可操作 */
+        #step2-card.disabled {
+            opacity: 0.5;
+            pointer-events: none;
         }
-        /* 【新增】讓常見症狀按鈕之間有點間距 */
-        .symptom-btn-group .btn {
-            margin-right: 0.5rem;
-            margin-bottom: 0.5rem;
-        }
-        /* 【新增】當地圖處於點選模式時，改變滑鼠游標為十字型 */
-        .map-click-mode {
-            cursor: crosshair !important;
-        }
+
     </style>
 </head>
 <body>
     <div class="container">
         <h1 class="mb-4 text-center">找醫生 - 智慧醫療導航</h1>
 
-        <ul class="nav nav-tabs mb-3" id="searchTabs" role="tablist">
-            <!-- 依症狀推薦頁籤 -->
-            <li class="nav-item" role="presentation">
-                <button class="nav-link active" id="symptom-search-tab" data-bs-toggle="tab" data-bs-target="#symptom-search" type="button" role="tab">1. 依症狀推薦</button>
-            </li>
-            <li class="nav-item" role="presentation">
-                <button class="nav-link" id="area-search-tab" data-bs-toggle="tab" data-bs-target="#area-search" type="button" role="tab">2. 依地區搜尋</button>
-            </li>
-            <li class="nav-item" role="presentation">
-                <button class="nav-link" id="nearby-search-tab" data-bs-toggle="tab" data-bs-target="#nearby-search" type="button" role="tab">3. 搜尋我附近</button>
-            </li>
-        </ul>
-
-
-        <!-- 頁籤內容 -->
-        <div class="tab-content" id="searchTabsContent">
-            
-            <!-- 依症狀推薦內容 -->
-            <div class="tab-pane fade show active" id="symptom-search" role="tabpanel">
+        <!-- 【核心修改】第一層：決定科別 -->
+        <div class="card mb-4" id="step1-card">
+            <div class="card-header fs-5 fw-bold">
+                第一步：您想找哪一科？
+            </div>
+            <div class="card-body">
                 <div class="mb-3">
-                    <label for="symptom-input" class="form-label">請簡單描述您的症狀</label>
+                    <label for="symptom-input" class="form-label"><b>選項 A:</b> 請描述您的症狀</label>
                     <textarea class="form-control" id="symptom-input" rows="3" placeholder="例如: 我喉嚨痛而且有點發燒..."></textarea>
                 </div>
-                <!-- 常見症狀按鈕 -->
                 <div class="mb-3 symptom-btn-group">
                     <small class="text-muted d-block mb-2">或點選常見症狀：</small>
                     <button class="btn btn-sm btn-outline-secondary" onclick="addSymptom('感冒 頭痛 發燒')">感冒/頭痛/發燒</button>
                     <button class="btn btn-sm btn-outline-secondary" onclick="addSymptom('咳嗽 喉嚨痛 流鼻水')">咳嗽/喉嚨痛</button>
                     <button class="btn btn-sm btn-outline-secondary" onclick="addSymptom('拉肚子 胃痛 嘔吐')">腸胃不適</button>
-                    <button class="btn btn-sm btn-outline-secondary" onclick="addSymptom('皮膚癢 疹子 過敏')">皮膚問題</button>
-                    <button class="btn btn-sm btn-outline-secondary" onclick="addSymptom('眼睛紅 眼睛痛')">眼睛不適</button>
                 </div>
                 <div>
-                    <button onclick="suggestDepartment()" class="btn btn-info">分析症狀並推薦科別</button>
-                    <button onclick="clearSymptomInput()" class="btn btn-outline-secondary ms-2">清空內容</button>
+                    <button onclick="suggestDepartment()" class="btn btn-info">分析症狀</button>
+                    <button onclick="clearSymptomInput()" class="btn btn-outline-secondary ms-2">清空</button>
                 </div>
                 <div id="suggestion-result" class="mt-3"></div>
-            </div>
-
-            <!-- 地區搜尋 -->
-            <div class="tab-pane fade" id="area-search" role="tabpanel">
-                <div class="row g-3 align-items-end justify-content-center mb-4">
-                    <div class="col-md-3">
-                        <label for="city-select" class="form-label">選擇縣市:</label>
-                        <select id="city-select" class="form-select">
-                            <option value="">載入中... </option>
-                        </select>
-                    </div>
-                    <div class="col-md-3">
-                        <label for="district-select" class="form-label">鄉鎮市區:</label>
-                        <select id="district-select" class="form-select">
-                            <option value="">載入中...</option>
-                        </select>
-                    </div>
-                    <div class="col-md-3">
-                        <label for="dept-select-area" class="form-label">選擇科別:</label>
-                        <select id="dept-select-area" class="form-select">
-                            <option value="">載入中... </option>
-                        </select>
-                    </div>
-
-                    <div class="col-md-auto">
-                        <button onclick="searchClinicsByArea()" class="btn btn-primary w-100">搜尋</button>
-                    </div>
-                    
-                </div>
-            </div>
-            <!-- 附近搜尋 -->
-            <div class="tab-pane fade" id="nearby-search" role="tabpanel">
-                <div class="row g-3 align-items-end justify-content-center mb-4">
-                    <div class="col-md-3"><label for="radius-select" class="form-label">搜尋半徑:</label><select id="radius-select" class="form-select"><option value="1">1 公里</option><option value="3" selected>3 公里</option><option value="5">5 公里</option></select></div>
-                    <div class="col-md-4"><label for="dept-select-nearby" class="form-label">選擇科別:</label><select id="dept-select-nearby" class="form-select"><option value="">載入中...</option></select></div>
-                    <div class="col-md-auto"><button onclick="searchClinicsNearby()" class="btn btn-success w-100">取得我的位置並搜尋</button></div>
-                </div>
-                <div class="row g-3 align-items-end justify-content-center mb-4">
-                    <div class="col-md-7">
-                        <label for="address-input" class="form-label">或輸入地址作為中心點:</label>
-                        <input type="text" id="address-input" class="form-control" placeholder="例如: 台北市信義區市府路1號">
-                    </div>
-                    <div class="col-md-auto">
-                         <button onclick="searchClinicsByAddress()" class="btn btn-secondary w-100">以此地址搜尋</button>
-                    </div>
-                    <!-- 【新增】地圖點選按鈕 -->
-                    <div class="col-md-auto">
-                        <button id="map-select-btn" onclick="activateMapClickSearch()" class="btn btn-outline-info w-100 mt-3 mt-md-0">在地圖上選取中心點</button>
-                   </div>
+                <hr>
+                <div class="mb-3">
+                    <label for="dept-select" class="form-label"><b>選項 B:</b> 或直接選擇科別</label>
+                    <select id="dept-select" class="form-select"></select>
                 </div>
             </div>
         </div>
 
+        <!-- 【核心修改】第二層：決定地點 -->
+        <div class="card disabled" id="step2-card">
+            <div class="card-header fs-5 fw-bold">
+                第二步：您想在哪裡找？
+            </div>
+            <div class="card-body">
+                <div id="step2-instruction" class="alert alert-info">請先在第一步選擇科別</div>
+                <div id="step2-content" class="d-none">
+                    <div class="row g-3 align-items-end mb-4">
+                        <div class="col-md-4"><label for="city-select" class="form-label"><b>選項 A:</b> 依地區</label><select id="city-select" class="form-select"></select></div>
+                        <div class="col-md-4"><label for="district-select" class="form-label">&nbsp;</label><select id="district-select" class="form-select"></select></div>
+                        <div class="col-md-auto"><button onclick="searchClinicsByArea()" class="btn btn-primary w-100">搜尋</button></div>
+                    </div>
+                    <hr>
+                    <div class="row g-3 align-items-end mb-2">
+                        <div class="col-md-4"><label for="radius-select" class="form-label"><b>選項 B:</b> 依我附近 (半徑)</label><select id="radius-select" class="form-select"><option value="1">1 km</option><option value="3" selected>3 km</option><option value="5">5 km</option></select></div>
+                        <div class="col-md-auto"><button onclick="searchClinicsNearby()" class="btn btn-success">取得我的位置</button></div>
+                        <div class="col-md-auto"><button id="map-select-btn" onclick="activateMapClickSearch()" class="btn btn-outline-info">在地圖上選取</button></div>
+                    </div>
+                    <div class="row g-3 align-items-end">
+                         <div class="col-md-8"><input type="text" id="address-input" class="form-control" placeholder="或輸入地址作為中心點"></div>
+                         <div class="col-md-auto"><button onclick="searchClinicsByAddress()" class="btn btn-secondary">以此地址搜尋</button></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
         <hr>
         <div id="map"></div>
         <ul id="clinic-list" class="list-group mt-3 mb-5"></ul>
@@ -126,16 +88,16 @@
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     
     <script>
-        // 初始化地圖
         const map = L.map('map').setView([25.033, 121.565], 11);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
         }).addTo(map);
         let clinicMarkerLayer = L.featureGroup().addTo(map);
         let userMarkerLayer = L.featureGroup().addTo(map);
+        let districtsData = {}, markers = [];
 
-        let districtsData = {};
-        let markers = [];
+        // 【新增】用來儲存第一層選擇結果的全域變數
+        let selectedDepartment = null;
 
         document.addEventListener('DOMContentLoaded', function() {
             loadDepartments();
@@ -144,14 +106,20 @@
 
         const citySelect = document.getElementById('city-select');
         const districtSelect = document.getElementById('district-select');
-        const deptSelectArea = document.getElementById('dept-select-area');
-        const deptSelectNearby = document.getElementById('dept-select-nearby');
+        const deptSelect = document.getElementById('dept-select');
         const radiusSelect = document.getElementById('radius-select');
         const symptomInput = document.getElementById('symptom-input');
         const suggestionResult = document.getElementById('suggestion-result');
         const addressInput = document.getElementById('address-input');
         const mapSelectBtn = document.getElementById('map-select-btn');
-        
+        const step2Card = document.getElementById('step2-card');
+        const step2Instruction = document.getElementById('step2-instruction');
+        const step2Content = document.getElementById('step2-content');
+
+        // 監聽事件
+        citySelect.addEventListener('change', e => updateDistrictOptions(e.target.value));
+        deptSelect.addEventListener('change', e => enableStep2(e.target.value));
+
         const URL = 'http://127.0.0.1:5001'
 
         citySelect.addEventListener('change', e => updateDistrictOptions(e.target.value));
@@ -161,13 +129,11 @@
             fetch(`${URL}/api/departments`)
                 .then(response => response.json()) 
                 .then(depts => {
-                    [deptSelectArea, deptSelectNearby].forEach(select => {
-                        select.innerHTML = '';
-                        depts.forEach(d => {
-                            const opt = document.createElement('option');
-                            opt.value = opt.textContent = d;
-                            select.appendChild(opt);
-                        });
+                    deptSelect.innerHTML = '<option value="">請選擇科別</option>';
+                    depts.forEach(d => {
+                        const opt = document.createElement('option');
+                        opt.value = opt.textContent = d;
+                        deptSelect.appendChild(opt);
                     });
                 })
                 .catch(error => {
@@ -208,21 +174,16 @@
             });
         }
 
-
-        // 【新增】點擊常見症狀按鈕時，將文字加入輸入框
         function addSymptom(symptomText) {
             const currentText = symptomInput.value;
-            // 如果輸入框已有文字，則加上空格再附加；否則直接填入
             symptomInput.value = currentText ? currentText + ' ' + symptomText : symptomText;
         }
 
-        // 【新增】清空症狀輸入框與結果的函式
         function clearSymptomInput() {
             symptomInput.value = '';
             suggestionResult.innerHTML = '';
         }
 
-        // 【新增】分析症狀並推薦科別的函式
         async function suggestDepartment() {
             const symptoms = symptomInput.value;
             if (!symptoms.trim()) {
@@ -238,74 +199,59 @@
             });
             const data = await response.json();
 
-            // 【核心修改】修改推薦成功後的顯示內容與行為
             if (data.departments && data.departments.length > 0) {
-                // 為了簡單起見，我們先只處理第一個推薦結果
                 const recommendedDept = data.departments[0];
-                
-                // 產生包含按鈕的 HTML
                 suggestionResult.innerHTML = `
                     <div class="alert alert-success">
                         <p class="mb-2">根據您的描述，我們推薦您可以前往「<b>${recommendedDept}</b>」。</p>
-                        <button class="btn btn-primary" onclick="proceedToSearch('${recommendedDept}')">
+                        <button class="btn btn-primary" onclick="enableStep2('${recommendedDept}')">
                             太好了！前往「依地區搜尋」尋找 ${recommendedDept} 診所
                         </button>
                     </div>`;
             } else {
-                suggestionResult.innerHTML = `<div class="alert alert-danger">無法根據您的描述找到對應的科別，建議您直接從「依地區搜尋」選擇「家庭醫學科」或「西醫一般科」進行諮詢。</div>`;
+                suggestionResult.innerHTML = `<div class="alert alert-danger">無法根據您的描述找到對應的科別，建議您直接選擇「家庭醫學科」或「西醫一般科」進行諮詢。</div>`;
             }
         }
 
-        // 【新增】處理跳轉至搜尋頁籤的函式
-        function proceedToSearch(department) {
-            // 1. 將推薦的科別，自動設定到「依地區搜尋」的下拉選單中
-            deptSelectArea.value = department;
-            
-            // 2. 使用 Bootstrap 的 JavaScript API 來手動切換頁籤
-            const areaSearchTab = new bootstrap.Tab(document.getElementById('area-search-tab'));
-            areaSearchTab.show();
-
-            // 3. (可選) 將頁面捲動到搜尋區塊，方便使用者操作
-            document.getElementById('area-search').scrollIntoView({ behavior: 'smooth' });
+        // 【新增】啟用第二層的函式
+        function enableStep2(department) {
+            if (!department) {
+                step2Card.classList.add('disabled');
+                step2Instruction.classList.remove('d-none');
+                step2Content.classList.add('d-none');
+                selectedDepartment = null;
+                return;
+            }
+            selectedDepartment = department;
+            step2Card.classList.remove('disabled');
+            step2Instruction.classList.add('d-none');
+            step2Content.classList.remove('d-none');
+            suggestionResult.innerHTML = `<div class="alert alert-success">已選擇科別：「<b>${department}</b>」。請至下方選擇搜尋地點。</div>`;
+            step2Card.scrollIntoView({ behavior: 'smooth' });
         }
 
+
         function searchClinicsByArea() {
+            if (!selectedDepartment) return alert('請先在第一步選擇科別。');
             const city = citySelect.value;
             const district = districtSelect.value;
-            const department = deptSelectArea.value; 
-            const url = `${URL}/search?city=${city}&district=${district}&department=${department}`;
+            const url = `${URL}/search?city=${city}&district=${district}&department=${selectedDepartment}`;
             fetchAndDisplayClinics(url);
         }
 
         function searchClinicsNearby() {
-            if (!navigator.geolocation) {
-                alert('您的瀏覽器不支援地理位置功能。');
-                return;
-            }
-            navigator.geolocation.getCurrentPosition(position => {
-                const lat = position.coords.latitude;
-                const lon = position.coords.longitude;
-                const radius = radiusSelect.value;
-                const department = deptSelectNearby.value;
-                const url = `${URL}/search/nearby?lat=${lat}&lon=${lon}&radius=${radius}&department=${department}`;
-                
-                // 在地圖上標示使用者位置
-                userMarkerLayer.clearLayers();
-                L.circle([lat, lon], { radius: 200, color: 'blue', fillColor: '#3388ff', fillOpacity: 0.3 }).addTo(userMarkerLayer);
-                L.marker([lat, lon]).addTo(userMarkerLayer).bindPopup('您的目前位置').openPopup();
-
-                fetchAndDisplayClinics(url);
-            }, () => {
-                alert('無法取得您的位置，請確認已授權瀏覽器讀取位置資訊。');
-            });
+            if (!selectedDepartment) return alert('請先在第一步選擇科別。');
+            if (!navigator.geolocation) return alert('您的瀏覽器不支援地理位置功能。');
+            navigator.geolocation.getCurrentPosition(pos => searchFromCoordinates(
+                pos.coords.latitude, pos.coords.longitude), 
+                () => alert('無法取得您的位置。')
+            );
         }
 
-        // 【新增】依地址搜尋的函式
         async function searchClinicsByAddress() {
+            if (!selectedDepartment) return alert('請先在第一步選擇科別。');
             const address = addressInput.value;
-            if (!address.trim()) {
-                return alert('請輸入地址。');
-            }
+            if (!address.trim()) return alert('請輸入地址。');
             
             const listElement = document.getElementById('clinic-list');
             listElement.innerHTML = `<li class="list-group-item">正在定位地址: ${address}...</li>`;
@@ -325,33 +271,23 @@
             }
         }
 
-        // 【新增】啟用地圖點選模式的函式
         function activateMapClickSearch() {
-            // 1. 改變滑鼠游標與按鈕文字，給予使用者回饋
+            if (!selectedDepartment) return alert('請先在第一步選擇科別。');
             map.getContainer().classList.add('map-click-mode');
             mapSelectBtn.textContent = '請在地圖上點選位置...';
             mapSelectBtn.disabled = true; // 暫時禁用按鈕避免重複點擊
-
-            // 2. 設定一個「一次性」的點擊事件監聽
             map.once('click', function(e) {
-                const lat = e.latlng.lat;
-                const lon = e.latlng.lng;
-                
-                // 3. 執行搜尋
-                searchFromCoordinates(lat, lon);
-                
-                // 4. 恢復游標與按鈕狀態
+                searchFromCoordinates(e.latlng.lat, e.latlng.lng);
                 map.getContainer().classList.remove('map-click-mode');
                 mapSelectBtn.textContent = '在地圖上選取中心點';
                 mapSelectBtn.disabled = false;
             });
         }
         
-        // 【新增】共用的函式，根據座標進行搜尋
         function searchFromCoordinates(lat, lon) {
+            if (!selectedDepartment) return;
             const radius = radiusSelect.value;
-            const department = deptSelectNearby.value;
-            const url = `${URL}/search/nearby?lat=${lat}&lon=${lon}&radius=${radius}&department=${department}`;
+            const url = `${URL}/search/nearby?lat=${lat}&lon=${lon}&radius=${radius}&department=${selectedDepartment}`;
             
             userMarkerLayer.clearLayers();
             L.marker([lat, lon]).addTo(userMarkerLayer).bindPopup('搜尋中心點').openPopup();
