@@ -4,10 +4,13 @@ from math import radians, sin, cos, sqrt, atan2
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 import numpy as np
+import requests
 
 app = Flask(__name__)
 CORS(app)
 app.config['JSON_AS_ASCII'] = False
+GOOGLE_API_URL = "https://maps.googleapis.com/maps/api/geocode/json"
+API_KEY = "AIzaSyC3VT6ZucjBzT-LsEn-UQGJWB7xeb_6Csg" 
 
 
 # --- Helper Function ---
@@ -48,6 +51,32 @@ except Exception as e:
     symptom_map = {}
 
 # --- API 端點 (Endpoints) ---
+
+
+# 【新增】將地址轉換為經緯度的 API
+@app.route('/api/geocode', methods=['GET'])
+def geocode_address():
+    """使用 Google Geocoding API 將地址轉換為經緯度"""
+    address = request.args.get('address', '')
+    if not address:
+        return jsonify({'error': '請提供地址'}), 400
+
+    params = {
+        'address': address,
+        'key': API_KEY,
+        'language': 'zh-TW'
+    }
+    try:
+        res = requests.get(GOOGLE_API_URL, params=params)
+        res.raise_for_status()
+        data = res.json()
+        if data['status'] == 'OK':
+            location = data['results'][0]['geometry']['location']
+            return jsonify(location) # 回傳 {'lat': ..., 'lng': ...}
+        else:
+            return jsonify({'error': f"無法解析地址: {data['status']}"}), 404
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/departments', methods=['GET'])
 def get_all_departments():
@@ -91,6 +120,8 @@ def suggest_department():
         if symptom_keyword in symptom_text:
             found_departments.add(department)
     
+    print(f"根據症狀: {symptom_text}，建議前往 {found_departments} 就診")
+
     return jsonify({'departments': list(found_departments)})
 
 
