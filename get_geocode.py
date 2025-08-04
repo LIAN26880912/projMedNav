@@ -5,6 +5,7 @@ import time
 import re 
 import requests
 import json
+import os
 
 # google geocoding API 一個月免費一萬筆資料
 
@@ -25,16 +26,27 @@ processArea = '新北市瑞芳區'
 
 def get_geocode():
 
-    print(f"正在讀取資料: {inputFilename}")
-    df = pd.read_csv(inputFilename)
-
-    if 'latitude' not in df.columns:
+    if not os.path.exists(outputFilename):
+        print(f"輸出檔案 {outputFilename} 不存在，將從 {inputFilename} 建立")
+        df = pd.readcsv(inputFilename)
         df['latitude'] = None
-    if 'longitude' not in df.columns:
         df['longitude'] = None
-        
-    df_to_process = df[df['latitude'].isna() & df['longitude'].isna()].copy()
-    df_to_process = df_to_process[df_to_process['縣市區名'] == processArea]
+        df.to_csv(outputFilename, index=False, encoding='utf-8-sig')
+        print(f"已從 {inputFilename} 建立 {outputFilename} 。")
+
+    print(f"正在讀取資料: {outputFilename}")
+    df = pd.read_csv(outputFilename)
+
+    for col in ['latitude', 'longitude']:
+        if col not in df.columns:
+            df[col] = None
+        else:
+            df[col] = pd.to_numeric(df[col], errors='coerce')
+    
+    is_in_area = df['縣市區名'] == processArea
+    is_missing_coords = df['latitude'].isnull() | df['longitude'].isnull()
+    df_to_process = df[is_in_area & is_missing_coords].copy()
+
     total_rows = len(df_to_process)
     print(f"將處理 {total_rows} 筆 {processArea} 的資料...")
 
@@ -82,11 +94,15 @@ def get_geocode():
                     df.at[index, 'longitude'] = data['status'] # 記錄失敗原因
                     print(f" -> 失敗: {data['status']}  {cleaned_address}")
 
+            except requests.exceptions.RequestException as e:
+                print(f" -> 發生網路請求錯誤: {e}  {cleaned_address}")
+                df.at[index, 'longitude'] = 'request_error'
+                # Optional: break or continue based on desired error handling
             except Exception as e:
                 print(f" -> 發生未知錯誤: {e}  {cleaned_address}")
-                df.at[index, 'longitude'] = 'error'
+                df.at[index, 'longitude'] = 'unknown_error'
                 break
-
+    
                 
             """
             for attempt in range(3): 
