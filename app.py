@@ -5,10 +5,13 @@ from flask import Flask, jsonify, request
 from flask_cors import CORS
 import numpy as np
 import requests
+from transformers import pipeline
 
 app = Flask(__name__)
 CORS(app)
 app.config['JSON_AS_ASCII'] = False
+
+
 GOOGLE_API_URL = "https://maps.googleapis.com/maps/api/geocode/json"
 API_KEY = "AIzaSyC3VT6ZucjBzT-LsEn-UQGJWB7xeb_6Csg" 
 
@@ -17,15 +20,12 @@ API_KEY = "AIzaSyC3VT6ZucjBzT-LsEn-UQGJWB7xeb_6Csg"
 def haversine_distance(lat1, lon1, lat2, lon2):
     """計算兩個經緯度座標之間的直線距離（公里）"""
     R = 6371  # 地球半徑（公里）
-    
     dLat = radians(lat2 - lat1)
     dLon = radians(lon2 - lon1)
     lat1 = radians(lat1)
     lat2 = radians(lat2)
-    
     a = sin(dLat/2)**2 + cos(lat1) * cos(lat2) * sin(dLon/2)**2
     c = 2 * atan2(sqrt(a), sqrt(1-a))
-    
     return R * c
 
 # --- 資料載入 ---
@@ -40,6 +40,27 @@ except FileNotFoundError:
 except Exception as e:
     print(f"讀取 CSV 時發生未知錯誤: {e}")
     df = pd.DataFrame()
+
+try:
+    with open('departments_list.json', 'r', encoding='utf-8') as f:
+        # 我們將使用這個科別列表，作為 NLP 模型的分類候選標籤
+        departments_list = json.load(f)
+    print("成功載入科別列表！")
+except Exception as e:
+    print(f"讀取 departments_list.json 時發生錯誤: {e}")
+    departments_list = []
+
+# 【核心修改】在伺服器啟動時，載入本地 NLP 模型
+try:
+    print("正在載入本地 NLP 模型 (第一次啟動會需要較長時間下載)...")
+    # 使用 "zero-shot-classification" 任務，它可以在沒有特別訓練的情況下，對文本進行分類
+    # 我們選用一個表現優異的中文 RoBERTa 模型
+    nlp_classifier = pipeline("zero-shot-classification", model="hfl/chinese-roberta-wwm-ext")
+    print("NLP 模型載入成功！")
+except Exception as e:
+    print(f"載入 NLP 模型時發生錯誤: {e}")
+    nlp_classifier = None
+
 
 # 【新增】在伺服器啟動時，載入症狀對照表
 try:
@@ -60,12 +81,7 @@ def geocode_address():
     address = request.args.get('address', '')
     if not address:
         return jsonify({'error': '請提供地址'}), 400
-
-    params = {
-        'address': address,
-        'key': API_KEY,
-        'language': 'zh-TW'
-    }
+    params = { 'address': address, 'key': API_KEY, 'language': 'zh-TW'}
     try:
         res = requests.get(GOOGLE_API_URL, params=params)
         res.raise_for_status()
@@ -105,24 +121,39 @@ def get_all_districts():
 # 【新增】依症狀推薦科別的 API
 @app.route('/api/suggest-department', methods=['POST'])
 def suggest_department():
-    """根據使用者輸入的症狀描述，推薦可能的科別"""
-    if not symptom_map:
-        return jsonify({"error": "症狀資料庫未載入"}), 500
+    if not nlp_classifier or not departments_list:
+        if not symptom_map:
+            return jsonify({"error": "症狀資料庫未載入，且NLP 服務或科別列表亦未準備就緒"}), 500
+        data = request.get_json()
+        symptom_text = data.get('symptoms', '')
+        if not symptom_text:
+            return jsonify({'departments': []})
+        # 找出所有匹配的科別
+        found_departments = set() # 使用 set 來自動處理重複的科別
+        for symptom_keyword, department in symptom_map.items():
+            if symptom_keyword in symptom_text:
+                found_departments.add(department)
+        print(f"根據症狀: {symptom_text}，建議前往 {found_departments} 就診")
+        return jsonify({'departments': list(found_departments)})
+
+    else:
+        data = request.get_json()
+        symptom_text = data.get('symptoms', '')
+        if not symptom_text:
+            return jsonify({'departments': []})
+
+        # 使用 NLP 模型進行分類
+        # 我們將使用者的症狀描述，與我們所有的科別列表進行比對
+        result = nlp_classifier(symptom_text, departments_list, multi_label=True)
         
-    data = request.get_json()
-    symptom_text = data.get('symptoms', '')
-    if not symptom_text:
-        return jsonify({'departments': []})
+        # result 的格式會是 {'sequence': '...', 'labels': ['科別A', '科別B', ...], 'scores': [0.9, 0.8, ...]}
+        # 我們回傳分數最高的科別
+        recommended_departments = [result['labels'][0]] if result['scores'][0] > 0.5 else []
 
-    # 找出所有匹配的科別
-    found_departments = set() # 使用 set 來自動處理重複的科別
-    for symptom_keyword, department in symptom_map.items():
-        if symptom_keyword in symptom_text:
-            found_departments.add(department)
-    
-    print(f"根據症狀: {symptom_text}，建議前往 {found_departments} 就診")
-
-    return jsonify({'departments': list(found_departments)})
+        print(f"NLP 分析結果: {result['labels'][0]} (信心分數: {result['scores'][0]:.2f})")
+        
+        return jsonify({'departments': recommended_departments})
+        
 
 
 
@@ -131,10 +162,8 @@ def search_clinic():
     department_query = request.args.get('department', '')
     city_query = request.args.get('city', '')
     district_query = request.args.get('district', '')
-    
     if df.empty or not department_query or not city_query:
         return jsonify({'error': '資料不完整或伺服器資料讀取失敗'}), 400
-    
     full_address_prefix = city_query + district_query
 
     result_df = df[df['縣市區名'].str.startswith(full_address_prefix, na=False)].copy()
@@ -161,14 +190,12 @@ def search_clinic():
    
     return jsonify(clinics)
 
-# 【新增】以座標為中心的半徑搜尋 API
 @app.route('/search/nearby', methods=['GET'])
 def search_nearby_clinics():
-    """根據使用者座標、半徑、科別，搜尋附近的診所。"""
     try:
         user_lat = float(request.args.get('lat'))
         user_lon = float(request.args.get('lon'))
-        radius_km = float(request.args.get('radius', 1)) # 預設半徑 1 公里
+        radius_km = float(request.args.get('radius', 1)) 
         department_query = request.args.get('department', '')
     except (TypeError, ValueError):
         return jsonify({'error': '緯度、經度與半徑必須是有效的數字'}), 400
@@ -176,16 +203,12 @@ def search_nearby_clinics():
     if df.empty or not department_query:
         return jsonify({'error': '科別為必填欄位'}), 400
 
-    # 1. 計算每家診所與使用者之間的距離
     distances = df.apply(
         lambda row: haversine_distance(user_lat, user_lon, row['latitude'], row['longitude']),
         axis=1
     )
-    # 2. 篩選出在半徑內的診所
     nearby_df = df[distances <= radius_km].copy()
-    # 3. 在半徑內的結果中，再篩選科別
     result_df = nearby_df[nearby_df['科別'].str.contains(department_query, na=False)]
-    # 4. 準備回傳資料
     if not result_df.empty:
         result_df[result_df.isna()]
         clinics = (result_df[['機構名稱', '地址', '電話', 'latitude', 'longitude']]
