@@ -4,8 +4,9 @@
 - 那個gemini API 挺不穩的，常常會error 503
 
 ### function (list by priority)
-- 輕重緩急判斷
 - 推薦複數科別
+  - 包含科別重新調整
+    - 例如把牙醫一般科五個字縮短成牙醫之類的
 - 聊天功能
 
 ### optimization more 
@@ -15,8 +16,12 @@
   - 整個使用流程還可以直覺一點
   - 黑暗模式
 - backend
+  - 緊急醫療的部分使用NLP處理
+    - 急診檢傷分類標準？
   - 診所的營業時間
-  - 急診
+      - 抓開放資料
+  - 
+
 
 ### expectations or considerations
 - 語音輸入

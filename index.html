@@ -199,6 +199,19 @@
             });
             const data = await response.json();
 
+            // 【核心修改】優先處理緊急狀況
+            if (data.emergency) {
+                suggestionResult.innerHTML = `
+                    <div class="alert alert-danger">
+                        <h4 class="alert-heading">緊急狀況警告！</h4>
+                        <p>您描述的症狀包含「<b>${data.matched_keyword}</b>」，這可能屬於緊急情況。</p>
+                        <hr>
+                        <p class="mb-0 fw-bold">請立即撥打 119 或前往就近的急診室尋求協助。本系統無法為緊急狀況提供建議。</p>
+                    </div>`;
+                return; // 中斷後續流程
+            }
+
+
             if (data.departments && data.departments.length > 0) {
                 const recommendedDept = data.departments[0];
                 suggestionResult.innerHTML = `

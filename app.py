@@ -8,6 +8,7 @@ import requests
 from transformers import pipeline
 import os
 from dotenv import load_dotenv
+
 from gemini_api import call_gemini_for_suggestion
 
 app = Flask(__name__)
@@ -64,6 +65,14 @@ try:
 except Exception as e:
     print(f"讀取 symptom_map.json 時發生錯誤: {e}")
     symptom_map = {}
+
+try:
+    with open('emergency_keywords.json', 'r', encoding='utf-8') as f:
+        emergency_keywords = json.load(f)
+    print("成功載入急症對照表！")
+except Exception as e:
+    print(f"讀取 emergency_keywords.json 時發生錯誤: {e}")
+    emergency_keywords = {}
 
 
 
@@ -128,6 +137,13 @@ def suggest_department():
     symptom_text = data.get('symptoms', '')
     if not symptom_text:
         return jsonify({'departments': []})
+
+    # --- 【核心修改】層級 0: 緊急狀況判斷 ---
+    for keyword in emergency_keywords:
+        if keyword in symptom_text:
+            print(f"偵測到緊急關鍵字: {keyword}")
+            # 回傳一個特殊的緊急狀態物件
+            return jsonify({"emergency": True, "matched_keyword": keyword})
 
     # --- 層級 1: 優先使用 symptom_map.json 進行關鍵字匹配 ---
     found_departments = set()
