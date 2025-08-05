@@ -6,6 +6,8 @@ import re
 import requests
 import json
 import os
+from dotenv import load_dotenv
+
 
 # google geocoding API 一個月免費一萬筆資料
 
@@ -17,11 +19,12 @@ def clean_address(address):
 # geolocator = Nominatim(user_agent="MediNav_Project_App/1.0", timeout=20)
 
 # --- 設定區 ---
-GOOGLE_API_URL = "https://maps.googleapis.com/maps/api/geocode/json"
-API_KEY = "AIzaSyC3VT6ZucjBzT-LsEn-UQGJWB7xeb_6Csg" 
+load_dotenv()  
+API_KEY = os.getenv("API_KEY")
+GEOCODE_API_URL = "https://maps.googleapis.com/maps/api/geocode/json"
 inputFilename = '醫療機構與人員基本資料_20231231.csv'
 outputFilename = 'medical_data_geocoded.csv'
-processArea = '連江縣'
+processArea = '基隆市'
 
 
 def get_geocode():
@@ -48,7 +51,15 @@ def get_geocode():
     df_to_process = df[is_in_area & is_missing_coords].copy()
 
     total_rows = len(df_to_process)
+
+    yn = input(f"共有 {total_rows} 筆資料需要處理，是否處理？ y/n\n")
+    if yn != 'y' and yn != 'Y':
+        print("已取消處理。")
+        return
+
     print(f"將處理 {total_rows} 筆 {processArea} 的資料...")
+
+
 
     if total_rows == 0:
         print("所有醫療院所皆已有經緯度資料，無需處理。")
@@ -77,7 +88,7 @@ def get_geocode():
                 # 為了避免過於頻繁的請求，仍然保留延遲
                 time.sleep(0.1) # Google API 較強健，可縮短延遲
                 
-                res = requests.get(GOOGLE_API_URL, params=params)
+                res = requests.get(GEOCODE_API_URL, params=params)
                 res.raise_for_status() # 確認請求成功
                 
                 data = res.json() # 解析回傳的 JSON

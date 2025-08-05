@@ -1,7 +1,7 @@
 # projMedNav
 ## TODO
 ### current problem list
-nil
+- 那個gemini API 挺不穩的，常常會error 503
 
 ### function (list by priority)
 - 輕重緩急判斷
@@ -26,11 +26,6 @@ nil
 - 串接導航API
 - 串接報案API
 - 上線
-
-### notification (to myself) 
-- API key 上線前一定要拿掉
-  
-
   
 ---
 # run
