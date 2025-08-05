@@ -6,14 +6,16 @@ from flask_cors import CORS
 import numpy as np
 import requests
 from transformers import pipeline
+import os
+from dotenv import load_dotenv
 
 app = Flask(__name__)
 CORS(app)
 app.config['JSON_AS_ASCII'] = False
 
-
-GOOGLE_API_URL = "https://maps.googleapis.com/maps/api/geocode/json"
-API_KEY = "AIzaSyC3VT6ZucjBzT-LsEn-UQGJWB7xeb_6Csg" 
+load_dotenv()  
+API_KEY = os.getenv("API_KEY")
+GEOCODE_API_URL = "https://maps.googleapis.com/maps/api/geocode/json"
 GEMINI_API_URL = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key={API_KEY}"
 
 
@@ -129,7 +131,7 @@ def geocode_address():
         return jsonify({'error': '請提供地址'}), 400
     params = { 'address': address, 'key': API_KEY, 'language': 'zh-TW'}
     try:
-        res = requests.get(GOOGLE_API_URL, params=params)
+        res = requests.get(GEOCODE_API_URL, params=params)
         res.raise_for_status()
         data = res.json()
         if data['status'] == 'OK':
