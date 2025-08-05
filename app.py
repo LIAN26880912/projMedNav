@@ -14,6 +14,7 @@ app.config['JSON_AS_ASCII'] = False
 
 GOOGLE_API_URL = "https://maps.googleapis.com/maps/api/geocode/json"
 API_KEY = "AIzaSyC3VT6ZucjBzT-LsEn-UQGJWB7xeb_6Csg" 
+GEMINI_API_URL = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key={API_KEY}"
 
 
 # --- Helper Function ---
@@ -27,6 +28,56 @@ def haversine_distance(lat1, lon1, lat2, lon2):
     a = sin(dLat/2)**2 + cos(lat1) * cos(lat2) * sin(dLon/2)**2
     c = 2 * atan2(sqrt(a), sqrt(1-a))
     return R * c
+
+def call_gemini_for_suggestion(symptom_text, candidate_departments):
+    """
+    當本地模型信心度不足時，呼叫 Gemini API 進行專家分析。
+    """
+    print("本地模型信心度不足，正在請求 Gemini 專家分析...")
+    
+    prompt = f"""
+    你是一個專業且謹慎的台灣醫療導航助理。你的唯一任務是根據使用者提供的「症狀描述」，從「候選科別列表」中，選擇出最適合的一個科別。
+
+    **規則：**
+    1.  絕對禁止提供任何形式的診斷或醫療建議。
+    2.  你的回答必須是標準的 JSON 格式。
+    3.  JSON 中必須包含一個名為 "department" 的鍵，其值必須是從下方候選科別列表中選出的最適合的科別名稱。
+
+    ---
+    **候選科別列表：**
+    {json.dumps(candidate_departments, ensure_ascii=False)}
+
+    **使用者症狀描述：**
+    "{symptom_text}"
+    ---
+
+    請根據以上資訊，生成你的推薦。
+    """
+    
+    payload = {
+        "contents": [{"parts": [{"text": prompt}]}],
+        "generationConfig": {
+            "responseMimeType": "application/json"
+        }
+    }
+    
+    try:
+        response = requests.post(GEMINI_API_URL, json=payload)
+        response.raise_for_status()
+        data = response.json()
+        
+        # 解析 Gemini 回傳的 JSON 字串
+        recommended_dept_json = json.loads(data['candidates'][0]['content']['parts'][0]['text'])
+        department = recommended_dept_json.get("department")
+        
+        if department:
+            print(f"Gemini 專家分析結果: {department}")
+            return [department]
+        return []
+    except Exception as e:
+        print(f"呼叫 Gemini API 時發生錯誤: {e}")
+        return []
+
 
 # --- 資料載入 ---
 try:
@@ -50,7 +101,15 @@ except Exception as e:
     print(f"讀取 departments_list.json 時發生錯誤: {e}")
     departments_list = []
 
-# 【核心修改】在伺服器啟動時，載入本地 NLP 模型
+# 【新增】在伺服器啟動時，載入症狀對照表
+try:
+    with open('symptom_map.json', 'r', encoding='utf-8') as f:
+        symptom_map = json.load(f)
+    print("成功載入症狀對照表！")
+except Exception as e:
+    print(f"讀取 symptom_map.json 時發生錯誤: {e}")
+    symptom_map = {}
+
 try:
     print("正在載入本地 NLP 模型 (第一次啟動會需要較長時間下載)...")
     # 使用 "zero-shot-classification" 任務，它可以在沒有特別訓練的情況下，對文本進行分類
@@ -61,20 +120,7 @@ except Exception as e:
     print(f"載入 NLP 模型時發生錯誤: {e}")
     nlp_classifier = None
 
-
-# 【新增】在伺服器啟動時，載入症狀對照表
-try:
-    with open('symptom_map.json', 'r', encoding='utf-8') as f:
-        symptom_map = json.load(f)
-    print("成功載入症狀對照表！")
-except Exception as e:
-    print(f"讀取 symptom_map.json 時發生錯誤: {e}")
-    symptom_map = {}
-
 # --- API 端點 (Endpoints) ---
-
-
-# 【新增】將地址轉換為經緯度的 API
 @app.route('/api/geocode', methods=['GET'])
 def geocode_address():
     """使用 Google Geocoding API 將地址轉換為經緯度"""
@@ -121,39 +167,39 @@ def get_all_districts():
 # 【新增】依症狀推薦科別的 API
 @app.route('/api/suggest-department', methods=['POST'])
 def suggest_department():
-    if not nlp_classifier or not departments_list:
-        if not symptom_map:
-            return jsonify({"error": "症狀資料庫未載入，且NLP 服務或科別列表亦未準備就緒"}), 500
-        data = request.get_json()
-        symptom_text = data.get('symptoms', '')
-        if not symptom_text:
-            return jsonify({'departments': []})
-        # 找出所有匹配的科別
-        found_departments = set() # 使用 set 來自動處理重複的科別
+    data = request.get_json()
+    symptom_text = data.get('symptoms', '')
+    if not symptom_text:
+        return jsonify({'departments': []})
+
+    # --- 層級 1: 優先使用 symptom_map.json 進行關鍵字匹配 ---
+    found_departments = set()
+    if symptom_map:
         for symptom_keyword, department in symptom_map.items():
             if symptom_keyword in symptom_text:
                 found_departments.add(department)
-        print(f"根據症狀: {symptom_text}，建議前往 {found_departments} 就診")
+    if found_departments:
+        print(f"Symptom Map 高優先度分析結果: {list(found_departments)}")
         return jsonify({'departments': list(found_departments)})
 
+    # --- 層級 2: 如果關鍵字無匹配，則使用本地 NLP 模型 ---
+    if not nlp_classifier or not departments_list:
+        return jsonify({"error": "關鍵字無匹配，且 NLP 服務未準備就緒"}), 500
+
+    print("關鍵字無匹配，轉交本地 NLP 模型進行分析...")
+    result = nlp_classifier(symptom_text, departments_list, multi_label=True)
+    
+    top_label = result['labels'][0]
+    top_score = result['scores'][0]
+    print(f"本地 NLP 分析結果: {top_label} (信心分數: {top_score:.2f})")
+
+    # --- 層級 3: 如果本地模型信心度不足，則請求 Gemini 專家分析 ---
+    CONFIDENCE_THRESHOLD = 0.7  # 設定信心度門檻為 70%
+    if top_score >= CONFIDENCE_THRESHOLD:
+        return jsonify({'departments': [top_label]})
     else:
-        data = request.get_json()
-        symptom_text = data.get('symptoms', '')
-        if not symptom_text:
-            return jsonify({'departments': []})
-
-        # 使用 NLP 模型進行分類
-        # 我們將使用者的症狀描述，與我們所有的科別列表進行比對
-        result = nlp_classifier(symptom_text, departments_list, multi_label=True)
-        
-        # result 的格式會是 {'sequence': '...', 'labels': ['科別A', '科別B', ...], 'scores': [0.9, 0.8, ...]}
-        # 我們回傳分數最高的科別
-        recommended_departments = [result['labels'][0]] if result['scores'][0] > 0.5 else []
-
-        print(f"NLP 分析結果: {result['labels'][0]} (信心分數: {result['scores'][0]:.2f})")
-        
-        return jsonify({'departments': recommended_departments})
-        
+        gemini_result = call_gemini_for_suggestion(symptom_text, departments_list)
+        return jsonify({'departments': gemini_result})      
 
 
 
