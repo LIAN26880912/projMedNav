@@ -193,7 +193,7 @@ def search_clinic():
     
     if not result_df.empty:
         result_df[result_df.isna()]
-        clinics = (result_df[['機構名稱', '地址', '電話', 'latitude', 'longitude']]
+        clinics = (result_df[['機構名稱', '地址', '縣市區名', '電話', 'latitude', 'longitude']]
             .head(100)
             .replace({
                 '地址': {np.nan: '未提供地址', '': '未提供地址'}, 
@@ -230,7 +230,7 @@ def search_nearby_clinics():
     result_df = nearby_df[nearby_df['科別'].str.contains(department_query, na=False)]
     if not result_df.empty:
         result_df[result_df.isna()]
-        clinics = (result_df[['機構名稱', '地址', '電話', 'latitude', 'longitude']]
+        clinics = (result_df[['機構名稱', '地址', '縣市區名', '電話', 'latitude', 'longitude']]
             .head(100)
             .replace({
                 '地址': {np.nan: '未提供地址', '': '未提供地址'}, 

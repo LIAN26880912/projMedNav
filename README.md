@@ -4,13 +4,12 @@
 - 那個gemini API 一開始有時候會503, 再觀察一下
 
 ### function (list by priority)
-- 聊天功能
+- 新增聊天功能。可以讓使用者選擇，讓他代替兩階段流程
 
 ### optimization more 
 - frontend
   - icon 還很難看，還有hover 功能
   - RWD
-  - 整個使用流程還可以直覺一點
   - 黑暗模式
 - backend
   - 緊急醫療的部分使用NLP處理
