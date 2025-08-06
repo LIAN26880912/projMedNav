@@ -1,12 +1,9 @@
 # projMedNav
 ## TODO
 ### current problem list
-- 那個gemini API 挺不穩的，常常會error 503
+- 那個gemini API 一開始有時候會503, 再觀察一下
 
 ### function (list by priority)
-- 推薦複數科別
-  - 包含科別重新調整
-    - 例如把牙醫一般科五個字縮短成牙醫之類的
 - 聊天功能
 
 ### optimization more 
@@ -20,10 +17,16 @@
     - 急診檢傷分類標準？
   - 診所的營業時間
       - 抓開放資料
-  - 
+- UX
+  - 科別簡化、符合一般人邏輯
+    - 例如把牙醫一般科五個字縮短成牙醫之類的
+  - 身心障礙牙科
+  - 兒童牙科
+  - 兒科診所
 
 
 ### expectations or considerations
+- 添加緊急連絡人功能
 - 語音輸入
 - 台語
 - 院所規模？
@@ -31,6 +34,9 @@
 - 串接導航API
 - 串接報案API
 - 上線
+- 定時上健保局網站拉資料
+- 資料勘誤？
+- 藥局
   
 ---
 # run
