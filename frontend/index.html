@@ -1,0 +1,531 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <title>找醫生 - 智慧醫療導航</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- 引入 Font Awesome 圖標庫 -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
+    <style>
+        #map { height: 450px; }
+        body { padding-top: 2rem; padding-bottom: 2rem; background-color: #f8f9fa; } 
+        .list-group-item:hover { background-color: #e9ecef; cursor: pointer;}
+        .symptom-btn-group .btn { margin-right: 0.5rem; margin-bottom: 0.5rem;}
+        .map-click-mode { cursor: crosshair !important;}
+        .card-header.clickable { cursor: pointer; }
+        .card-header.clickable:hover { background-color: #e9ecef; }
+        #step2-card.disabled { opacity: 0.6; pointer-events: none; }
+        .clinic-item-details {
+            font-size: 0.9rem;
+            color: #6c757d;
+        }
+        .clinic-item-details a {
+            text-decoration: none;
+            color: #0d6efd;
+        }
+        .clinic-item-details a:hover {
+            text-decoration: underline;
+        }
+        .clinic-item-details .fa-solid {
+            margin-right: 0.4rem;
+        }
+        /* Popup 樣式 */
+        .leaflet-popup-content a {
+            text-decoration: none;
+            color: #0d6efd;
+            margin-right: 10px;
+        }
+        .leaflet-popup-content a:hover {
+            text-decoration: underline;
+        }
+
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 class="mb-4 text-center">找醫生 - 智慧醫療導航</h1>
+
+        <!-- 第一層：決定科別 -->
+        <div class="card mb-4" id="step1-card">
+            <div class="card-header fs-5 fw-bold" id="step1-header">
+                第一步：您想找哪一科？
+                <!-- 【新增】用於顯示摘要的區域 -->
+                <span id="step1-summary" class="fs-6 fw-normal text-primary ms-3 d-none"></span>
+            </div>
+            <div class="card-body" id="step1-body">
+                <div class="mb-3">
+                    <label for="symptom-input" class="form-label"><b>選項 A:</b> 請描述您的症狀</label>
+                    <textarea class="form-control" id="symptom-input" rows="3" placeholder="例如: 我喉嚨痛而且有點發燒..."></textarea>
+                </div>
+                <div class="mb-3 symptom-btn-group">
+                    <small class="text-muted d-block mb-2">或點選常見症狀：</small>
+                    <button class="btn btn-sm btn-outline-secondary" onclick="addSymptom('感冒 頭痛 發燒')">感冒/頭痛/發燒</button>
+                    <button class="btn btn-sm btn-outline-secondary" onclick="addSymptom('咳嗽 喉嚨痛 流鼻水')">咳嗽/喉嚨痛</button>
+                    <button class="btn btn-sm btn-outline-secondary" onclick="addSymptom('拉肚子 胃痛 嘔吐')">腸胃不適</button>
+                </div>
+                <div>
+                    <button onclick="suggestDepartment()" class="btn btn-info">分析症狀</button>
+                    <button onclick="clearSymptomInput()" class="btn btn-outline-secondary ms-2">清空</button>
+                </div>
+                <div id="suggestion-result" class="mt-3"></div>
+                <hr>
+                <div class="mb-3">
+                    <label for="dept-select" class="form-label"><b>選項 B:</b> 或直接選擇科別</label>
+                    <select id="dept-select" class="form-select"></select>
+                </div>
+            </div>
+        </div>
+
+        <!-- 【核心修改】第二層：決定地點 -->
+        <div class="card mb-4 disabled" id="step2-card">
+            <div class="card-header fs-5 fw-bold" id="step2-header">
+                第二步：您想在哪裡找？
+                <span id="step2-summary" class="fs-6 fw-normal text-primary ms-3 d-none"></span>
+            </div>
+            <div class="card-body" id="step2-body">
+                <div id="step2-instruction" class="alert alert-info">請先在第一步選擇科別</div>
+                <div id="step2-content" class="d-none">
+                    <div class="row g-3 align-items-end mb-4">
+                        <div class="col-md-4"><label for="city-select" class="form-label"><b>選項 A:</b> 依地區</label><select id="city-select" class="form-select"></select></div>
+                        <div class="col-md-4"><label for="district-select" class="form-label">&nbsp;</label><select id="district-select" class="form-select"></select></div>
+                        <div class="col-md-auto"><button onclick="searchClinicsByArea()" class="btn btn-primary w-100">搜尋</button></div>
+                    </div>
+                    <hr>
+                    <div class="row g-3 align-items-end mb-2">
+                        <div class="col-md-4"><label for="radius-select" class="form-label"><b>選項 B:</b> 依我附近 (半徑)</label><select id="radius-select" class="form-select"><option value="1">1 km</option><option value="3" selected>3 km</option><option value="5">5 km</option></select></div>
+                        <div class="col-md-auto"><button onclick="searchClinicsNearby()" class="btn btn-success">取得我的位置</button></div>
+                        <div class="col-md-auto"><button id="map-select-btn" onclick="activateMapClickSearch()" class="btn btn-outline-info">在地圖上選取</button></div>
+                    </div>
+                    <div class="row g-3 align-items-end">
+                            <div class="col-md-8"><input type="text" id="address-input" class="form-control" placeholder="或輸入地址作為中心點"></div>
+                            <div class="col-md-auto"><button onclick="searchClinicsByAddress()" class="btn btn-secondary">以此地址搜尋</button></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 第三層：結果顯示 -->
+        <div id="result-section" class="d-none">
+            <hr>
+            <h3 class="mb-3">搜尋結果</h3>
+            <div id="map"></div>
+            <ul id="clinic-list" class="list-group mt-3 mb-5"></ul>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    
+    <script>
+        const URL = 'http://127.0.0.1:5001'
+
+        let map = null, clinicMarkerLayer = null, userMarkerLayer = null;
+        let districtsData = {}, markers = [];
+        let selectedDepartment = null, selectedLocationInfo = '';
+        
+        // 【新增】定義自訂圖標
+        const clinicIcon = L.divIcon({
+            html: '<i class="fa-solid fa-house-medical-circle-check fa-2x" style="color: #d9534f;"></i>',
+            className: 'custom-div-icon',
+            iconSize: [30, 42],
+            iconAnchor: [15, 42],
+            popupAnchor: [0, -45]
+        });
+
+        const userIcon = L.divIcon({
+            html: '<i class="fa-solid fa-street-view fa-2x" style="color: #0275d8;"></i>',
+            className: 'custom-div-icon',
+            iconSize: [30, 42],
+            iconAnchor: [15, 42],
+            popupAnchor: [0, -45]
+        });
+        
+        
+        document.addEventListener('DOMContentLoaded', function() {
+            loadDepartments();
+            loadDistricts();
+        });
+
+        const citySelect = document.getElementById('city-select');
+        const districtSelect = document.getElementById('district-select');
+        const deptSelect = document.getElementById('dept-select');
+        const radiusSelect = document.getElementById('radius-select');
+        const symptomInput = document.getElementById('symptom-input');
+        const suggestionResult = document.getElementById('suggestion-result');
+        const addressInput = document.getElementById('address-input');
+        const mapSelectBtn = document.getElementById('map-select-btn');
+        
+        const step1Card = document.getElementById('step1-card');
+        const step1Header = document.getElementById('step1-header');
+        const step1Body = document.getElementById('step1-body');
+        const step1Summary = document.getElementById('step1-summary');
+
+        const step2Card = document.getElementById('step2-card');
+        const step2Header = document.getElementById('step2-header');
+        const step2Body = document.getElementById('step2-body');
+        const step2Summary = document.getElementById('step2-summary');
+        const step2Instruction = document.getElementById('step2-instruction');
+        const step2Content = document.getElementById('step2-content');
+        
+        const resultSection = document.getElementById('result-section');
+
+        // 監聽事件
+        step1Header.addEventListener('click', editStep1);
+        step2Header.addEventListener('click', editStep2);
+
+        citySelect.addEventListener('change', e => updateDistrictOptions(e.target.value));
+        deptSelect.addEventListener('change', e => enableStep2(e.target.value));
+
+        function initializeMap() {
+            if (!map) {
+                map = L.map('map').setView([25.033, 121.565], 11);
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' }).addTo(map);
+                clinicMarkerLayer = L.featureGroup().addTo(map);
+                userMarkerLayer = L.featureGroup().addTo(map);
+            }
+        }
+
+        function loadDepartments(){
+            fetch(`${URL}/api/departments`)
+                .then(response => response.json()) 
+                .then(depts => {
+                    deptSelect.innerHTML = '<option value="">請選擇科別</option>';
+                    depts.forEach(d => {
+                        const opt = document.createElement('option');
+                        opt.value = opt.textContent = d;
+                        deptSelect.appendChild(opt);
+                    });
+                })
+                .catch(error => {
+                    console.error('無法載入科別列表:', error);
+                    select.innerHTML = '<option value="">載入失敗</option>';
+                });
+        }
+        function loadDistricts() {
+            fetch(`${URL}/api/districts`)
+                .then(response => response.json())
+                .then(data => {
+                    districtsData = data;
+                    const cities = Object.keys(districtsData);
+                    citySelect.innerHTML = '<option value="">請選擇縣市</option>';
+                    cities.forEach(c => {
+                        const opt = document.createElement('option');
+                        opt.value = opt.textContent = c;
+                        citySelect.appendChild(opt);
+                    });
+                    if (cities.length > 0) {
+                        citySelect.value = cities[0];
+                        updateDistrictOptions(cities[0]);
+                    }
+                })
+                .catch(error => {
+                    console.error('無法載入地區列表:', error);
+                    citySelect.innerHTML = '<option value="">載入失敗</option>';
+                });
+        }
+
+        function updateDistrictOptions(selectedCity) {
+            const districts = districtsData[selectedCity] || [];
+            districtSelect.innerHTML = '<option value="">全部</option>';
+            districts.forEach(district => {
+                const opt = document.createElement('option');
+                opt.value = opt.textContent = district;
+                districtSelect.appendChild(opt);
+            });
+        }
+
+        function addSymptom(symptomText) {
+            const currentText = symptomInput.value;
+            symptomInput.value = currentText ? currentText + ' ' + symptomText : symptomText;
+        }
+
+        function clearSymptomInput() {
+            symptomInput.value = '';
+            suggestionResult.innerHTML = '';
+        }
+
+        async function suggestDepartment() {
+            const symptoms = symptomInput.value;
+            if (!symptoms.trim()) {
+                suggestionResult.innerHTML = `<div class="alert alert-warning">請輸入您的症狀描述。</div>`;
+                return;
+            }
+
+            suggestionResult.innerHTML = `<div class="alert alert-info">正在分析中...</div>`;
+
+            const response = await fetch(`${URL}/api/suggest-department`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ symptoms: symptoms })
+            });
+            const data = await response.json();
+
+            if (data.emergency) {
+                suggestionResult.innerHTML = `
+                    <div class="alert alert-danger">
+                        <h4 class="alert-heading">緊急狀況警告！</h4>
+                        <p>您描述的症狀包含「<b>${data.matched_keyword}</b>」，這可能屬於緊急情況。</p>
+                        <hr>
+                        <p class="mb-0 fw-bold">請立即撥打 119 或前往就近的急診室尋求協助。本系統無法為緊急狀況提供建議。</p>
+                    </div>`;
+                return; // 中斷後續流程
+            }
+
+
+            if (data.departments && data.departments.length > 0) {
+                const recommendedDept = data.departments[0];
+                suggestionResult.innerHTML = `
+                    <div class="alert alert-success">
+                        <p class="mb-2">根據您的描述，我們推薦您可以前往「<b>${recommendedDept}</b>」。</p>
+                        <button class="btn btn-primary" onclick="enableStep2('${recommendedDept}')">
+                            太好了！前往「依地區搜尋」尋找 ${recommendedDept} 診所
+                        </button>
+                    </div>`;
+            } else {
+                suggestionResult.innerHTML = `<div class="alert alert-danger">無法根據您的描述找到對應的科別，建議您直接選擇「家庭醫學科」或「西醫一般科」進行諮詢。</div>`;
+            }
+        }
+
+        // 啟用第二層的函式
+        function enableStep2(department) {
+            if (!department) {
+                editStep1();
+                return;
+            }
+            selectedDepartment = department;
+
+            deptSelect.value = department;
+
+            // 更新第一步為摘要模式
+            step1Summary.textContent = `已選擇科別：${department}`;
+            step1Summary.classList.remove('d-none');
+            step1Body.classList.add('d-none');
+            step1Header.classList.add('clickable');
+
+            // 啟用並顯示第二步
+            step2Card.classList.remove('disabled');
+            step2Body.classList.remove('d-none');
+            step2Summary.classList.add('d-none');
+            step2Header.classList.remove('clickable');
+            step2Instruction.classList.add('d-none');
+            step2Content.classList.remove('d-none');
+
+            // 隱藏結果
+            resultSection.classList.add('d-none');
+            
+            step2Card.scrollIntoView({ behavior: 'smooth' });
+        }
+
+
+        function searchClinicsByArea() {
+            if (!selectedDepartment) return alert('請先在第一步選擇科別。');
+            const city = citySelect.value;
+            const district = districtSelect.value;
+            selectedLocationInfo = `地點：${city} ${district}`;
+            const url = `${URL}/search?city=${city}&district=${district}&department=${selectedDepartment}`;
+            fetchAndDisplayClinics(url);
+        }
+
+        function searchClinicsNearby() {
+            if (!selectedDepartment) return alert('請先在第一步選擇科別。');
+            if (!navigator.geolocation) return alert('您的瀏覽器不支援地理位置功能。');
+            navigator.geolocation.getCurrentPosition(pos => {
+                selectedLocationInfo = '地點：我的附近';
+                searchFromCoordinates(pos.coords.latitude, pos.coords.longitude);
+            });
+        }
+
+        async function searchClinicsByAddress() {
+            if (!selectedDepartment) return alert('請先在第一步選擇科別。');
+            const address = addressInput.value;
+            if (!address.trim()) return alert('請輸入地址。');
+
+            selectedLocationInfo = `地點：${address}`;
+
+            const listElement = document.getElementById('clinic-list');
+            listElement.innerHTML = `<li class="list-group-item">正在定位地址: ${address}...</li>`;
+
+            try {
+                const response = await fetch(`${URL}/api/geocode?address=${encodeURIComponent(address)}`);
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || '地址解析失敗');
+                }
+                const coords = await response.json();
+                searchFromCoordinates(coords.lat, coords.lng);
+            } catch (error) {
+                console.error('地址解析錯誤:', error);
+                alert(`無法找到您輸入的地址，請檢查後再試一次。\n錯誤訊息: ${error.message}`);
+                listElement.innerHTML = '';
+            }
+        }
+
+        function activateMapClickSearch() {
+            if (!selectedDepartment) return alert('請先在第一步選擇科別。');
+            selectedLocationInfo = '地點：地圖選取點';
+            resultSection.classList.remove('d-none');
+
+            initializeMap();
+            map.getContainer().classList.add('map-click-mode');
+            mapSelectBtn.textContent = '請在地圖上點選位置...';
+            mapSelectBtn.disabled = true; // 暫時禁用按鈕避免重複點擊
+            map.once('click', function(e) {
+                searchFromCoordinates(e.latlng.lat, e.latlng.lng);
+                map.getContainer().classList.remove('map-click-mode');
+                mapSelectBtn.textContent = '在地圖上選取中心點';
+                mapSelectBtn.disabled = false;
+            });
+        }
+        
+        function searchFromCoordinates(lat, lon) {
+            if (!selectedDepartment) return;
+            initializeMap();
+            const radius = radiusSelect.value;
+            const url = `${URL}/search/nearby?lat=${lat}&lon=${lon}&radius=${radius}&department=${selectedDepartment}`;
+            
+            userMarkerLayer.clearLayers();
+            // 【修改】使用自訂圖標
+            L.marker([lat, lon], { icon: userIcon }).addTo(userMarkerLayer).bindPopup('搜尋中心點').openPopup();
+            fetchAndDisplayClinics(url, true);
+        }
+
+
+        async function fetchAndDisplayClinics(url, isNearbySearch = false) {
+            resultSection.classList.remove('d-none');
+            initializeMap();
+
+            const listElement = document.getElementById('clinic-list');
+            listElement.innerHTML = '<li class="list-group-item">搜尋中...</li>';
+
+            clinicMarkerLayer.clearLayers();
+            if (!isNearbySearch) userMarkerLayer.clearLayers();
+            markers = []; 
+
+            const response = await fetch(url);
+            const clinics = await response.json();
+
+            // 搜尋完成後，將第二步也變為摘要模式
+            step2Summary.textContent = selectedLocationInfo;
+            step2Body.classList.add('d-none');
+            step2Summary.classList.remove('d-none');
+            step2Header.classList.add('clickable');
+
+            listElement.innerHTML = '';
+            if (clinics.length === 0) {
+                listElement.innerHTML = '<li class="list-group-item text-muted">找不到符合條件的醫療院所。</li>';
+                if (isNearbySearch) map.flyTo(userMarkerLayer.getBounds().getCenter(), 15);
+                return;
+            }
+
+            try{
+                clinics.forEach((clinic, index) => {
+                    const name = clinic.機構名稱;
+                    const address = clinic.地址;
+                    const district = clinic.縣市區名;
+                    const phone = clinic.電話;
+
+                    const li = document.createElement('li');
+                    li.className = 'list-group-item';
+
+                    const googleMapSearchName = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(district)}${encodeURIComponent(name)}`;
+                    
+                    li.innerHTML = `
+                        <div class="d-flex w-100 justify-content-between">
+                            <h5 class="mb-1">${name}</h5>
+                        </div>
+                        <div class="clinic-item-details">
+                            <p class="mb-1">
+                                <i class="fa-solid fa-location-dot"></i>
+                                <a href="${googleMapSearchName}" target="_blank" rel="noopener noreferrer">${address}</a>
+                            </p>
+                            <p class="mb-0">
+                                <i class="fa-solid fa-phone"></i>
+                                ${phone ? `<a href="tel:${phone}">${phone}</a>` : '未提供'}
+                            </p>
+                        </div>
+                    `;
+
+                    li.dataset.markerIndex = index;
+                    li.addEventListener('click', function() {
+                        const targetMarker = markers[this.dataset.markerIndex];
+                        if (targetMarker) {
+                            map.flyTo(targetMarker.getLatLng(), 16);
+                            targetMarker.openPopup();
+                        }
+                    });
+                    listElement.appendChild(li);
+
+                    if (clinic.latitude && clinic.longitude) {
+                        // 【修改】使用自訂圖標
+                        const marker = L.marker([clinic.latitude, clinic.longitude], { icon: clinicIcon }).addTo(clinicMarkerLayer);
+                        // 【修改】Popup 內容也加入連結
+                        const popupContent = `
+                            <b>${name}</b><br>
+                            <a href="${googleMapSearchName}" target="_blank" rel="noopener noreferrer" title="在 Google Maps 中開啟"><i class="fa-solid fa-map-location-dot"></i> 導航</a>
+                            ${phone ? ` | <a href="tel:${phone}" title="撥打電話"><i class="fa-solid fa-phone-volume"></i> 通話</a>` : ''}
+                        `;
+                        marker.bindPopup(popupContent);
+
+                        // 【核心修改】新增 hover 事件
+                        marker.on('mouseover', function (e) {
+                            this.openPopup();
+                        });
+                        // 可選：滑鼠移開時關閉，但在觸控裝置上體驗可能不佳
+                        /*
+                        marker.on('mouseout', function (e) {
+                            this.closePopup();
+                        });
+                        */
+
+                        markers.push(marker);
+                    } else {
+                        markers.push(null);
+                    }
+                });
+            }
+            catch (e) {
+                console.error("在處理診所列表時發生錯誤:", e);
+                listElement.innerHTML = '<li class="list-group-item text-danger">處理結果時發生錯誤，請查看主控台。</li>';
+            }
+
+            const allMarkers = L.featureGroup([...clinicMarkerLayer.getLayers(), ...userMarkerLayer.getLayers()]);
+            if (allMarkers.getLayers().length > 0) {
+                setTimeout(() => {
+                    map.flyToBounds(allMarkers.getBounds(), { padding: [50, 50] });
+                }, 100);
+            }
+        }
+
+        function editStep1() {
+            // 如果科別都還沒選，就沒什麼好編輯的
+            if (!selectedDepartment) return;
+
+            // 展開第一步的編輯區
+            step1Body.classList.remove('d-none');
+            step1Summary.classList.add('d-none');
+            step1Header.classList.remove('clickable');
+
+            // 同時，將第二步收合成摘要模式 (並確保標題可點擊)
+            step2Body.classList.add('d-none');
+            step2Summary.classList.remove('d-none');
+            step2Header.classList.add('clickable');
+        }
+
+        function editStep2() {
+            // 如果科別都還沒選，第二步是無法操作的
+            if (!selectedDepartment) return;
+            
+            // 展開第二步的編輯區
+            step2Body.classList.remove('d-none');
+            step2Summary.classList.add('d-none');
+            step2Header.classList.remove('clickable');
+            
+            // 同時，將第一步收合成摘要模式 (並確保標題可點擊)
+            step1Body.classList.add('d-none');
+            step1Summary.classList.remove('d-none');
+            step1Header.classList.add('clickable');
+        }
+    </script>
+</body>
+</html>
