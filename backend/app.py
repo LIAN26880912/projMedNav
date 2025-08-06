@@ -5,9 +5,9 @@ from flask import Flask, jsonify, request
 from flask_cors import CORS
 import numpy as np
 import requests
-from transformers import pipeline
 import os
 from dotenv import load_dotenv
+# from transformers import pipeline
 
 from gemini_api import call_gemini_for_suggestion
 
@@ -77,11 +77,16 @@ except Exception as e:
 
 
 try:
+    """
     print("正在載入本地 NLP 模型 (第一次啟動會需要較長時間下載)...")
     # 使用 "zero-shot-classification" 任務，它可以在沒有特別訓練的情況下，對文本進行分類
     # 我們選用一個表現優異的中文 RoBERTa 模型
     nlp_classifier = pipeline("zero-shot-classification", model="hfl/chinese-roberta-wwm-ext")
     print("NLP 模型載入成功！")
+    """
+    nlp_classifier = None
+    print("本地 NLP 模型先停用，不然部屬上去的RAM 會爆炸。將依賴關鍵字與 Gemini API。")
+
 except Exception as e:
     print(f"載入 NLP 模型時發生錯誤: {e}")
     nlp_classifier = None
@@ -161,6 +166,9 @@ def suggest_department():
     if not nlp_classifier or not departments_list:
         return jsonify({"error": "關鍵字無匹配，且 NLP 服務未準備就緒"}), 500
 
+
+    localNLPuse = False
+    """
     print("關鍵字無匹配，轉交本地 NLP 模型進行分析...")
     result = nlp_classifier(symptom_text, departments_list, multi_label=True)
     
@@ -170,8 +178,12 @@ def suggest_department():
 
     # --- 層級 3: 如果本地模型信心度不足，則請求 Gemini 專家分析 ---
     CONFIDENCE_THRESHOLD = 0.9  # 設定信心度門檻
+    
     if top_score >= CONFIDENCE_THRESHOLD:
         return jsonify({'departments': [top_label]})
+    """
+    if localNLPuse: 
+        print("local NLP use")
     else:
         gemini_result = call_gemini_for_suggestion(symptom_text, departments_list, API_KEY)
         return jsonify({'departments': gemini_result})      
