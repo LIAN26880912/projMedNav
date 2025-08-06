@@ -24,14 +24,14 @@ API_KEY = os.getenv("API_KEY")
 GEOCODE_API_URL = "https://maps.googleapis.com/maps/api/geocode/json"
 inputFilename = '醫療機構與人員基本資料_20231231.csv'
 outputFilename = '../backend/medical_data_geocoded.csv'
-processArea = '新北市貢寮區'
+processArea = '臺北市南港區'
 
 
 def get_geocode():
 
     if not os.path.exists(outputFilename):
         print(f"輸出檔案 {outputFilename} 不存在，將從 {inputFilename} 建立")
-        df = pd.readcsv(inputFilename)
+        df = pd.read_csv(inputFilename)
         df['latitude'] = None
         df['longitude'] = None
         df.to_csv(outputFilename, index=False, encoding='utf-8-sig')
