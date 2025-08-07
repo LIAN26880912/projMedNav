@@ -1,4 +1,7 @@
 # projMedNav
+## Deployment
+<https://mednav.sunhow123.cc>
+
 ## TODO
 ### current problem list
 - 那個gemini API 一開始有時候會503, 再觀察一下
