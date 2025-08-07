@@ -11,8 +11,14 @@ from dotenv import load_dotenv
 
 from gemini_api import call_gemini_for_suggestion
 
+# 建立一個允許來源的列表
+origins = [
+    "https://mednavfront.onrender.com",  # 保留 Render 預設網址，方便測試
+    "https://mednav.sunhow123.cc"          # 【新增】您自己的子網域
+]
+
 app = Flask(__name__)
-CORS(app)
+CORS(app, origins = origins)
 app.config['JSON_AS_ASCII'] = False
 
 load_dotenv()  
