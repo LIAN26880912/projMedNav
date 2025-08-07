@@ -7,15 +7,18 @@ import numpy as np
 import requests
 import os
 from dotenv import load_dotenv
-# from transformers import pipeline
 
 from gemini_api import call_gemini_for_suggestion
 
-# 建立一個允許來源的列表
-origins = [
-    "https://mednavfront.onrender.com",  # 保留 Render 預設網址，方便測試
-    "https://mednav.sunhow123.cc"          # 【新增】您自己的子網域
-]
+nlp = False
+ 
+if nlp:
+    from transformers import pipeline
+    origins = [
+        'https://projmednav.onrender.com',
+        'https://mednav.sunhow123.cc',]
+else:
+    origins = ['*']
 
 app = Flask(__name__)
 CORS(app, origins = origins)
@@ -82,20 +85,21 @@ except Exception as e:
 
 
 
-try:
-    """
-    print("正在載入本地 NLP 模型 (第一次啟動會需要較長時間下載)...")
-    # 使用 "zero-shot-classification" 任務，它可以在沒有特別訓練的情況下，對文本進行分類
-    # 我們選用一個表現優異的中文 RoBERTa 模型
-    nlp_classifier = pipeline("zero-shot-classification", model="hfl/chinese-roberta-wwm-ext")
-    print("NLP 模型載入成功！")
-    """
+if nlp:
+    try:
+        
+        print("正在載入本地 NLP 模型 (第一次啟動會需要較長時間下載)...")
+        # 使用 "zero-shot-classification" 任務，它可以在沒有特別訓練的情況下，對文本進行分類
+        # 我們選用一個表現優異的中文 RoBERTa 模型
+        nlp_classifier = pipeline("zero-shot-classification", model="hfl/chinese-roberta-wwm-ext")
+        print("NLP 模型載入成功！")
+
+    except Exception as e:
+        print(f"載入 NLP 模型時發生錯誤: {e}")
+        nlp_classifier = None
+else:
     nlp_classifier = None
     print("本地 NLP 模型先停用，不然部屬上去的RAM 會爆炸。將依賴關鍵字與 Gemini API。")
-
-except Exception as e:
-    print(f"載入 NLP 模型時發生錯誤: {e}")
-    nlp_classifier = None
 
 # --- API 端點 (Endpoints) ---
 @app.route('/api/geocode', methods=['GET'])
@@ -167,32 +171,31 @@ def suggest_department():
     if found_departments:
         print(f"Symptom Map 高優先度分析結果: {list(found_departments)}")
         return jsonify({'departments': list(found_departments)})
+    print("關鍵字無匹配，轉交其他模型進行分析...")
 
-    # --- 層級 2: 如果關鍵字無匹配，則使用本地 NLP 模型 ---
-    if not nlp_classifier or not departments_list:
-        return jsonify({"error": "關鍵字無匹配，且 NLP 服務未準備就緒"}), 500
+    # --- 層級 2: 如果關鍵字無匹配，且非雲端部屬模式，則使用本地 NLP 模型 ---
+    if nlp:
+        print("非雲端部屬，檢查 NLP 服務。")
 
+        if not nlp_classifier or not departments_list:
+            return jsonify({"error": "關鍵字無匹配，且 NLP 服務未準備就緒"}), 500
 
-    localNLPuse = False
-    """
-    print("關鍵字無匹配，轉交本地 NLP 模型進行分析...")
-    result = nlp_classifier(symptom_text, departments_list, multi_label=True)
+        print("使用本地 NLP 模型進行分析...")
+        result = nlp_classifier(symptom_text, departments_list, multi_label=True)
+        
+        top_label = result['labels'][0]
+        top_score = result['scores'][0]
+
+        CONFIDENCE_THRESHOLD = 0.9  # 設定信心度門檻
     
-    top_label = result['labels'][0]
-    top_score = result['scores'][0]
-    print(f"本地 NLP 分析結果: {top_label} (信心分數: {top_score:.2f})")
+        if top_score >= CONFIDENCE_THRESHOLD:
+            print(f"本地 NLP 分析結果: {top_label} (信心分數: {top_score:.2f})")
+            return jsonify({'departments': [top_label]})
 
     # --- 層級 3: 如果本地模型信心度不足，則請求 Gemini 專家分析 ---
-    CONFIDENCE_THRESHOLD = 0.9  # 設定信心度門檻
-    
-    if top_score >= CONFIDENCE_THRESHOLD:
-        return jsonify({'departments': [top_label]})
-    """
-    if localNLPuse: 
-        print("local NLP use")
-    else:
-        gemini_result = call_gemini_for_suggestion(symptom_text, departments_list, API_KEY)
-        return jsonify({'departments': gemini_result})      
+    print("本地 NLP 模型信心度不足，或未使用本地 NLP ，請求 Gemini API 進行分析...")
+    gemini_result = call_gemini_for_suggestion(symptom_text, departments_list, API_KEY)
+    return jsonify({'departments': gemini_result})      
 
 
 

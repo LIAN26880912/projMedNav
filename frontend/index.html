@@ -118,7 +118,9 @@
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     
     <script>
-        const URL = 'https://projmednav.onrender.com'
+        // 這邊用判斷式就會爆開
+        const URL = 'http://127.0.0.1:5001'; 
+        //const URL = 'https://projmednav.onrender.com'; 
 
         let map = null, clinicMarkerLayer = null, userMarkerLayer = null;
         let districtsData = {}, markers = [];
