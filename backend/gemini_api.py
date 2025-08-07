@@ -1,8 +1,11 @@
-import json, os, requests
+# gemini_api.py
+
+import requests
+import json
 
 def call_gemini_for_suggestion(symptom_text, candidate_departments, API_KEY):
     """
-    當本地模型信心度不足時，呼叫 Gemini API 進行專家分析。
+    這是一個極簡化的測試版本，用來診斷核心連線問題。
     """
     if not API_KEY:
         print("錯誤：未提供 Gemini API Key。")
@@ -10,73 +13,28 @@ def call_gemini_for_suggestion(symptom_text, candidate_departments, API_KEY):
 
     GEMINI_API_URL = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key={API_KEY}"
 
-    print("本地模型信心度不足，正在請求 Gemini 專家分析...")
-    
-    prompt = f"""
-    你是一個專業且謹慎的台灣醫療導航助理。你的唯一任務是根據使用者提供的「症狀描述」，從「候選科別列表」中，選擇出最適合的一個科別。
-
-    **規則：**
-    1.  絕對禁止提供任何形式的診斷或醫療建議。
-    2.  你的回答必須是標準的 JSON 格式。
-    3.  JSON 中必須包含一個名為 "department" 的鍵，其值必須是從下方候選科別列表中選出的最適合的科別名稱。
-
-    ---
-    **候選科別列表：**
-    {json.dumps(candidate_departments, ensure_ascii=False)}
-
-    **使用者症狀描述：**
-    "{symptom_text}"
-    ---
-
-    請根據以上資訊，生成你的推薦。
-    """
-    
-    payload = {
-        "contents": [{"parts": [{"text": prompt}]}],
-        "generationConfig": {
-            "responseMimeType": "application/json"
-        }
+    # --- 【極簡化測試 payload】 ---
+    # 我們完全不使用傳入的參數，只用一個最簡單的 "你好" 來測試
+    minimal_payload = {
+        "contents": [{"parts": [{"text": "你好"}]}]
     }
-    
+    print("!!! 正在執行極簡化連線測試 !!!")
+
     try:
-        response = requests.post(GEMINI_API_URL, json=payload)
-        response.raise_for_status() # 如果 HTTP 狀態碼是 4xx 或 5xx，這會拋出錯誤
-        data = response.json()
-        
-        # --- 【最終除錯代碼】 ---
-        # 在做任何 JSON 解析之前，先將回應視為純文字並印出
-        raw_response_body = response.text
+        print("準備發送極簡請求...")
+        # 設定 15 秒的超時，避免卡住
+        response = requests.post(GEMINI_API_URL, json=minimal_payload, timeout=15)
+        print("極簡請求已發送，準備印出回應...")
+
+        # 如果請求成功發送並收到回應，我們將看到以下日誌
         print("="*40)
-        print("從伺服器收到的最原始回應 body (純文字):")
-        print(raw_response_body)
+        print(f"極簡測試 - 回應狀態碼: {response.status_code}")
+        print(f"極簡測試 - 回應純文字: {response.text}")
         print("="*40)
-        # --- 【最終除錯代碼結束】 ---
 
-        # 現在才嘗試解析。錯誤很可能發生在下一行
-        data = response.json()
-        
-        # ... 後續的程式碼不變 ...
-        raw_text_from_gemini = data['candidates'][0]['content']['parts'][0]['text']
-        print(f"從 Gemini 收到的內部回應文字: {raw_text_from_gemini}")
+        # 既然是測試，我們直接回傳一個固定值，讓前端知道發生了什麼
+        return ["測試成功，但目前為除錯模式"]
 
-        try:
-            recommended_dept_json = json.loads(raw_text_from_gemini)
-            department = recommended_dept_json.get("department")
-            
-            if department:
-                print(f"Gemini 專家分析結果: {department}")
-                return [department]
-            else:
-                print("Gemini 回應中未找到 'department' 鍵。")
-                return []
-        
-        except json.JSONDecodeError as json_err:
-            print(f"解析 Gemini 回應時發生 JSON 格式錯誤: {json_err}")
-            return []
-
-    except requests.exceptions.RequestException as req_err:
-        print(f"請求 Gemini API 時發生網路錯誤: {req_err}")
-        return []
     except Exception as e:
-        print(f"處理 API 回應時發生未預期錯誤: {e}") # 此處會捕捉到 RecursionError
-        return []
+        print(f"在極簡測試中發生錯誤: {e}")
+        return ["測試失敗"]
