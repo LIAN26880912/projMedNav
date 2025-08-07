@@ -1,9 +1,3 @@
-# --- GEVENT MONKEY-PATCH (放置在檔案最頂端) ---
-# 這幾行必須是此檔案中最早執行的程式碼
-from gevent import monkey
-monkey.patch_all()
-# -----------------------------------------
-
 import pandas as pd
 import json
 from math import radians, sin, cos, sqrt, atan2
