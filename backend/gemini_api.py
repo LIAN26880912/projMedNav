@@ -40,19 +40,33 @@ def call_gemini_for_suggestion(symptom_text, candidate_departments, API_KEY):
     
     try:
         response = requests.post(GEMINI_API_URL, json=payload)
-        response.raise_for_status()
+        response.raise_for_status() # 如果 HTTP 狀態碼是 4xx 或 5xx，這會拋出錯誤
         data = response.json()
         
-        # 解析 Gemini 回傳的 JSON 字串
-        recommended_dept_json = json.loads(data['candidates'][0]['content']['parts'][0]['text'])
-        department = recommended_dept_json.get("department")
+        # 【關鍵修改 1】在解析前，先取出原始文字並印出來
+        raw_text_from_gemini = data['candidates'][0]['content']['parts'][0]['text']
+        print(f"從 Gemini 收到的原始回應文字: {raw_text_from_gemini}")
+
+        # 【關鍵修改 2】針對 JSON 解析增加更具體的錯誤處理
+        try:
+            recommended_dept_json = json.loads(raw_text_from_gemini)
+            department = recommended_dept_json.get("department")
+            
+            if department:
+                print(f"Gemini 專家分析結果: {department}")
+                return [department]
+            else:
+                print("Gemini 回應中未找到 'department' 鍵。")
+                return []
         
-        if department:
-            print(f"Gemini 專家分析結果: {department}")
-            return [department]
+        except json.JSONDecodeError as json_err:
+            print(f"解析 Gemini 回應時發生 JSON 格式錯誤: {json_err}")
+            return []
+
+    except requests.exceptions.RequestException as req_err:
+        print(f"請求 Gemini API 時發生網路錯誤: {req_err}")
         return []
     except Exception as e:
-        print(f"呼叫 Gemini API 時發生錯誤: {e}")
+        # 這個 Exception 會捕捉到 RecursionError 等其他所有未預期的錯誤
+        print(f"呼叫 Gemini API 時發生未預期錯誤: {e}")
         return []
-
-
