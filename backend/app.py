@@ -16,7 +16,8 @@ if nlp:
     from transformers import pipeline
     origins = [
         'https://projmednav.onrender.com',
-        'https://mednav.sunhow123.cc',]
+        'https://mednav.sunhow123.cc',
+    ]
 else:
     origins = ['*']
 
