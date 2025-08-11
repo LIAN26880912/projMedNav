@@ -44,6 +44,7 @@ body {
     background-color: var(--bg-color);
     color: var(--text-color);
     transition: background-color 0.3s, color 0.3s;
+    -webkit-text-size-adjust: 100%; /* 防止 iPhone 橫向時自動放大字體 */
 }
 
 .card {
