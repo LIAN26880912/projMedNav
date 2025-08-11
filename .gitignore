@@ -13,5 +13,5 @@ __pycache__/
 .DS_Store
 Thumbs.db
 
-# 環境變數檔 (如果未來有的話)
-.env
+# 環境變數檔（API_KEY）
+.env 
