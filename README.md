@@ -16,11 +16,11 @@
 
 ### optimization more 
 - frontend
-  - RWD
-  - 黑暗模式
 - backend
   - 緊急醫療的部分使用NLP處理
-    - 急診檢傷分類標準？
+    - 先用prompt engeering 讓gemini 處理
+    - 考慮使用openmed
+
   - 診所的營業時間
       - 抓開放資料
 - UX

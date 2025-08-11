@@ -272,15 +272,26 @@ body {
         padding-top: 1rem;
         padding-bottom: 1rem;
     }
+    
+    .container {
+        padding-left: 1rem;
+        padding-right: 1rem;
+    }
 
     h1 {
-        font-size: 1.75rem;
-        /* 縮小主標題 */
+        font-size: 1.75rem; /* 縮小主標題 */
     }
 
     h3 {
-        font-size: 1.5rem;
-        /* 縮小結果標題 */
+        font-size: 1.5rem; /* 縮小結果標題 */
+    }
+    
+    .card-header.fs-5 {
+        font-size: 1.1rem !important; /* 調整卡片標題字體大小 */
+    }
+
+    .card-body {
+        padding: 1rem; /* 縮小卡片內距 */
     }
 
     /* 讓第二步驟中的所有按鈕都變成滿版，並增加間距 */
@@ -290,12 +301,19 @@ body {
     }
 
     /* 確保地址輸入框與按鈕能正確堆疊 */
-    #step2-content .row>div {
+    #step2-content .row > div {
         padding-bottom: 0.5rem;
     }
 
     #chat-window {
-        height: 250px;
-        /* 在小螢幕上稍微降低聊天視窗高度 */
+        height: 250px; /* 在小螢幕上稍微降低聊天視窗高度 */
+    }
+
+    #theme-toggle {
+        width: 40px;
+        height: 40px;
+        font-size: 1.1rem;
+        top: 0.5rem;
+        right: 0.5rem;
     }
 }
