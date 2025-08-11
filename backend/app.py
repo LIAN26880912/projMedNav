@@ -8,7 +8,7 @@ import requests
 import os
 from dotenv import load_dotenv
 
-from gemini_api import call_gemini_for_suggestion
+from gemini_api import call_gemini_for_suggestion, call_gemini_for_validation
 
 nlp = False
  
@@ -148,7 +148,20 @@ def get_all_districts():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-# 【新增】依症狀推薦科別的 API
+@app.route('/api/validate-answer', methods=['POST'])
+def validate_answer():
+    data = request.get_json()
+    question = data.get('question')
+    answer = data.get('answer')
+    if not question or not answer:
+        return jsonify({'error': 'Question and answer are required'}), 400
+
+    # 呼叫 gemini_api 中的新函式
+    validation_result = call_gemini_for_validation(question, answer, API_KEY)
+    return jsonify(validation_result)
+
+
+# 依症狀推薦科別的 API
 @app.route('/api/suggest-department', methods=['POST'])
 def suggest_department():
     data = request.get_json()
@@ -156,7 +169,7 @@ def suggest_department():
     if not symptom_text:
         return jsonify({'departments': []})
 
-    # --- 【核心修改】層級 0: 緊急狀況判斷 ---
+    # --- 層級 0: 緊急狀況判斷 ---
     for keyword in emergency_keywords:
         if keyword in symptom_text:
             print(f"偵測到緊急關鍵字: {keyword}")
@@ -170,8 +183,13 @@ def suggest_department():
             if symptom_keyword in symptom_text:
                 found_departments.add(department)
     if found_departments:
-        print(f"Symptom Map 高優先度分析結果: {list(found_departments)}")
-        return jsonify({'departments': list(found_departments)})
+        # 如果關鍵字匹配到，我們也用 Gemini 的格式回傳，方便前端統一處理
+        print(f"Symptom Map 高優先度分析結果: {list(found_departments)[0]}")
+        return jsonify({
+            "department": list(found_departments)[0],
+            "urgency_level": "可安排門診",
+            "recommendation_reason": "根據症狀關鍵字匹配"
+        })
     print("關鍵字無匹配，轉交其他模型進行分析...")
 
     # --- 層級 2: 如果關鍵字無匹配，且非雲端部屬模式，則使用本地 NLP 模型 ---
@@ -196,7 +214,7 @@ def suggest_department():
     # --- 層級 3: 如果本地模型信心度不足，則請求 Gemini 專家分析 ---
     print("本地 NLP 模型信心度不足，或未使用本地 NLP ，請求 Gemini API 進行分析...")
     gemini_result = call_gemini_for_suggestion(symptom_text, departments_list, API_KEY)
-    return jsonify({'departments': gemini_result})      
+    return jsonify(gemini_result)      
 
 
 

@@ -46,6 +46,12 @@
 - 藥局
 - 有無健保、院所等級（費用）
 - 串院所的看診、預約掛號系統？
+
+### REFs
+- [OpenMed 醫療NLP model](https://www.threads.com/@sliven0722/post/DMmNhZggTuO?xmt=AQF0XV3glCwnjPmjg_OjD-HJkCbXZCHNf3BhfqnSXRrq7Q)
+- 緊急避難地圖3.0
+  - [介紹影片](https://www.facebook.com/watch/?v=1237349654221012&rdid=qxOLGHNKaTsAJ71G)
+  - [地圖本體](https://taiwan-emergency-shelter-finder.vercel.app/)
   
 ---
 # run
