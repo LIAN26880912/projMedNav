@@ -1,0 +1,150 @@
+/* 【核心修改】使用 CSS 變數來定義顏色主題 */
+:root {
+    --bg-color: #f8f9fa;
+    --text-color: #212529;
+    --secondary-text-color: #6c757d;
+    --card-bg: #ffffff;
+    --card-border-color: rgba(0, 0, 0, 0.175);
+    --input-bg: #fff;
+    --input-border-color: #ced4da;
+    --input-text-color: #495057;
+    --list-group-item-bg: #fff;
+    --list-group-item-hover-bg: #e9ecef;
+    --bot-message-bg: #e9ecef;
+    --bot-message-text-color: #212529;
+    --header-bg: #f7f7f7;
+    --map-filter: none;
+}
+
+body.dark-mode {
+    --bg-color: #121212;
+    --text-color: #f5f5f5; /* 【調整】提高主要文字亮度，接近純白 */
+    --secondary-text-color: #adb5bd; /* 深色模式下的次要文字顏色 */
+    --card-bg: #1e1e1e;
+    --card-border-color: rgba(255, 255, 255, 0.125);
+    --input-bg: #2a2a2a;
+    --input-border-color: #444;
+    --input-text-color: #f5f5f5; /* 【調整】提高輸入框文字亮度 */
+    --list-group-item-bg: #1e1e1e;
+    --list-group-item-hover-bg: #333;
+    --bot-message-bg: #3a3a3a; /* 【調整】稍微調亮機器人對話框背景色，增加區隔 */
+    --bot-message-text-color: #f5f5f5; /* 【調整】確保機器人對話文字清晰 */
+    --header-bg: #1e1e1e;
+    --map-filter: brightness(0.6) invert(1) contrast(3) hue-rotate(200deg) saturate(0.3) brightness(0.7);
+}
+
+body {
+    padding-top: 2rem;
+    padding-bottom: 2rem;
+    background-color: var(--bg-color);
+    color: var(--text-color);
+    transition: background-color 0.3s, color 0.3s;
+}
+
+.card {
+    background-color: var(--card-bg);
+    border-color: var(--card-border-color);
+}
+
+.card-header {
+    background-color: var(--header-bg);
+    border-bottom-color: var(--card-border-color);
+    color: var(--text-color); /* 【新增】確保 Header 文字顏色跟隨主題 */
+}
+
+/* 【新增】確保重新確認的文字顏色能跟隨主題 */
+#restart-confirmation {
+    color: var(--text-color);
+}
+
+.list-group-item {
+    background-color: var(--list-group-item-bg);
+    color: var(--text-color);
+    border-color: var(--card-border-color);
+}
+
+.list-group-item:hover {
+    background-color: var(--list-group-item-hover-bg);
+}
+
+.form-control, .form-select {
+    background-color: var(--input-bg);
+    border-color: var(--input-border-color);
+    color: var(--input-text-color);
+}
+.form-control::placeholder { color: var(--secondary-text-color); } /* 使用變數 */
+.form-control:focus, .form-select:focus {
+    background-color: var(--input-bg);
+    border-color: #86b7fe;
+    color: var(--input-text-color);
+    box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
+}
+
+#map { height: 450px; }
+.map-click-mode { cursor: crosshair !important;}
+.card-header.clickable { cursor: pointer; }
+.card-header.clickable:hover { background-color: var(--list-group-item-hover-bg); }
+#step2-card.disabled { opacity: 0.6; pointer-events: none; }
+.clinic-item-details { 
+    font-size: 0.9rem; 
+    color: var(--secondary-text-color); /* 使用變數 */
+}
+.clinic-item-details a { text-decoration: none; color: #0d6efd; }
+.clinic-item-details a:hover { text-decoration: underline; }
+.clinic-item-details .fa-solid { margin-right: 0.4rem; }
+
+.leaflet-popup-content-wrapper, .leaflet-popup-tip {
+    background: var(--card-bg);
+    color: var(--text-color);
+}
+.leaflet-popup-content a { text-decoration: none; color: #0d6efd; margin-right: 10px; }
+.leaflet-popup-content a:hover { text-decoration: underline; }
+.leaflet-tile-pane { filter: var(--map-filter); }
+
+#chat-window { 
+    height: 300px; 
+    overflow-y: auto; 
+    border: 1px solid var(--input-border-color); 
+    padding: 1rem; 
+    margin-bottom: 1rem; 
+    background-color: var(--input-bg); 
+    border-radius: 0.375rem; 
+}
+.chat-message { margin-bottom: 1rem; display: flex; }
+.bot-message .message-bubble { 
+    background-color: var(--bot-message-bg); 
+    color: var(--bot-message-text-color); /* 明確指定文字顏色 */
+    border-radius: 15px 15px 15px 0; 
+    padding: 0.75rem 1rem; 
+    max-width: 80%; 
+}
+.user-message { justify-content: flex-end; }
+.user-message .message-bubble { background-color: #0d6efd; color: white; border-radius: 15px 15px 0 15px; padding: 0.75rem 1rem; max-width: 80%; }
+.message-icon { font-size: 1.5rem; margin-right: 0.75rem; color: #6c757d; }
+.user-message .message-icon { margin-right: 0; margin-left: 0.75rem; color: #adb5bd; }
+
+.typing-indicator { display: flex; align-items: center; }
+.typing-indicator span { height: 8px; width: 8px; margin: 0 2px; background-color: #6c757d; display: block; border-radius: 50%; opacity: 0.4; animation: typing 1s infinite; }
+.typing-indicator span:nth-child(2) { animation-delay: 0.2s; }
+.typing-indicator span:nth-child(3) { animation-delay: 0.4s; }
+@keyframes typing { 0% { opacity: 0.4; } 20% { opacity: 1; } 100% { opacity: 0.4; } }
+
+#theme-toggle {
+    position: fixed;
+    top: 1rem;
+    right: 1rem;
+    z-index: 1000;
+    cursor: pointer;
+    background-color: var(--card-bg);
+    border-radius: 50%;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+    /* 【核心修改】固定大小並讓圖示置中 */
+    width: 45px;
+    height: 45px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 1.25rem; /* 微調圖示大小 */
+}
+.fa-sun { color: #f39c12; }
+.fa-moon { color: #f1c40f; }
