@@ -345,7 +345,8 @@
                 伴隨症狀: ${userAnswers[2] || '未提供'}。
                 過去病史: ${userAnswers[3] || '未提供'}。
             `;
-            
+            suggestionResult.classList.remove('d-none');
+                        
             // 使用舊的 suggestDepartment API 端點，傳入我們的摘要
             try {
                 const response = await fetch(`${URL}/api/suggest-department`, {
