@@ -5,6 +5,9 @@
 ## TODO
 ### current problem list
 - 那個gemini API 一開始有時候會503, 再觀察一下
+- 急診的服務時間要再加上
+- 地址按下去會壞掉
+- 有些院所的時間不會顯示，怪怪的
 
 ### function (list by priority)
 - 營業時間

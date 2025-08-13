@@ -601,6 +601,126 @@
         }
 
 
+        /* --- 【核心修改】圖標與服務時間相關函式 --- */
+
+        //根據特約類別和看診狀態，產生對應的 Leaflet 圖標
+        function getClinicIcon(clinic, isOpen) {
+            let iconHtml = '<i class="fa-solid fa-house-medical"></i>'; // 預設圖示
+            let className = 'custom-div-icon ';
+            const type = clinic['特約類別_描述'] || '基層院所';
+
+            if (type.includes('醫學中心')) {
+                iconHtml = '<i class="fa-solid fa-hospital"></i>';
+                className += 'icon-medical-center';
+            } else if (type.includes('區域醫院')) {
+                iconHtml = '<i class="fa-solid fa-hospital-user"></i>';
+                className += 'icon-regional-hospital';
+            } else if (type.includes('地區醫院')) {
+                iconHtml = '<i class="fa-solid fa-house-medical-flag"></i>';
+                className += 'icon-district-hospital';
+            } else { // 基層院所
+                className += 'icon-clinic';
+            }
+
+            // 根據看診狀態決定是否加上 'closed' 樣式
+            if (!isOpen) {
+                className += ' icon-closed';
+            }
+
+            return L.divIcon({
+                html: iconHtml,
+                className: className,
+                iconSize: [30, 30],
+                iconAnchor: [15, 15],
+                popupAnchor: [0, -15]
+            });
+        }
+
+        //根據當前時間判斷診所是否營業
+        function getServiceStatus(clinic) {
+            const now = new Date();
+            const dayOfWeek = now.getDay(); // 0=週日, 1=週一, ..., 6=週六
+            const hour = now.getHours();
+            
+            const daysMap = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
+            const currentDay = daysMap[dayOfWeek];
+            
+            let timeSlot = '';
+            if (hour >= 8 && hour < 12) timeSlot = 'am';
+            else if (hour >= 14 && hour < 18) timeSlot = 'pm';
+            else if (hour >= 18 && hour < 22) timeSlot = 'eve';
+            
+            if (!timeSlot) {
+                return { isOpen: false, text: "休息中" };
+            }
+
+            const statusCol = `${currentDay}_${timeSlot}`;
+            const isOpen = clinic[statusCol] === 1;
+
+            return {
+                isOpen: isOpen,
+                text: isOpen ? "看診中" : "休息中"
+            };
+        }
+
+        //將服務時段資料格式化為 HTML 表格
+        function formatServiceHours(clinic) {
+            let html = '<table class="service-hours-table"><thead><tr><th></th><th>一</th><th>二</th><th>三</th><th>四</th><th>五</th><th>六</th><th>日</th></tr></thead><tbody>';
+            const times = [{key: 'am', name: '上午'}, {key: 'pm', name: '下午'}, {key: 'eve', name: '晚上'}];
+            const days = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
+            
+            times.forEach(time => {
+                html += `<tr><td>${time.name}</td>`;
+                days.forEach(day => {
+                    const colName = `${day}_${time.key}`;
+                    const isOpen = clinic[colName] === 1;
+                    html += `<td class="${isOpen ? 'open' : ''}">${isOpen ? '●' : '—'}</td>`;
+                });
+                html += '</tr>';
+            });
+
+            html += '</tbody></table>';
+            return html;
+        }
+
+
+        function getPopupServiceInfo(clinic, status) {
+            const now = new Date();
+            const dayOfWeek = now.getDay();
+            const hour = now.getHours();
+            const daysMap = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
+            const dayNames = ['週日', '週一', '週二', '週三', '週四', '週五', '週六'];
+            const timesMap = [
+                { key: 'am', name: '上午診' },
+                { key: 'pm', name: '下午診' },
+                { key: 'eve', name: '晚上診' }
+            ];
+            if (status.isOpen) {
+                let currentSession = '';
+                if (hour >= 8 && hour < 12) currentSession = '上午診';
+                else if (hour >= 14 && hour < 18) currentSession = '下午診';
+                else if (hour >= 18 && hour < 22) currentSession = '晚上診';
+                return `<br><span class="popup-status-open">今日 ${currentSession} 服務中</span>`;
+            } else {
+                for (let i = 0; i < 7; i++) {
+                    const checkDayIndex = (dayOfWeek + i) % 7;
+                    const checkDayKey = daysMap[checkDayIndex];
+                    for (const time of timesMap) {
+                        if (i === 0) {
+                            if (time.key === 'am' && hour >= 12) continue;
+                            if (time.key === 'pm' && hour >= 18) continue;
+                            if (time.key === 'eve' && hour >= 22) continue;
+                        }
+                        const colName = `${checkDayKey}_${time.key}`;
+                        if (clinic[colName] === 1) {
+                            return `<br><span class="popup-status-closed">下次看診: ${dayNames[checkDayIndex]} ${time.name}</span>`;
+                        }
+                    }
+                }
+                return '<br><span class="popup-status-closed">近期無看診時段</span>';
+            }
+        }
+
         async function fetchAndDisplayClinics(url, isNearbySearch = false) {
             resultSection.classList.remove('d-none');
             initializeMap();
@@ -608,56 +728,64 @@
             const listElement = document.getElementById('clinic-list');
             listElement.innerHTML = '<li class="list-group-item">搜尋中...</li>';
 
-            // 【修改】清除舊的圖標
+            // 清除舊的圖標
             markerClusterGroup.clearLayers();
             if (!isNearbySearch) userMarkerLayer.clearLayers();
             clinicMarkers = []; // 重置儲存的 marker 陣列
 
-            const response = await fetch(url);
-            const clinics = await response.json();
-
-            // 搜尋完成後，將第二步也變為摘要模式
-            step2Summary.textContent = selectedLocationInfo;
-            step2Body.classList.add('d-none');
-            step2Summary.classList.remove('d-none');
-            step2Header.classList.add('clickable');
-
-            listElement.innerHTML = '';
-            if (clinics.length === 0) {
-                listElement.innerHTML = '<li class="list-group-item text-muted">找不到符合條件的醫療院所。</li>';
-                if (isNearbySearch) map.flyTo(userMarkerLayer.getBounds().getCenter(), 15);
-                return;
-            }
-
             try{
+                const response = await fetch(url);
+                if (!response.ok) throw new Error(`伺服器錯誤: ${response.status}`);
+                const clinics = await response.json();
+
+                // 搜尋完成後，將第二步也變為摘要模式
+                step2Summary.textContent = selectedLocationInfo;
+                step2Body.classList.add('d-none');
+                step2Summary.classList.remove('d-none');
+                step2Header.classList.add('clickable');
+
+                listElement.innerHTML = '';
+                if (clinics.length === 0) {
+                    listElement.innerHTML = '<li class="list-group-item text-muted">找不到符合條件的醫療院所。</li>';
+                    if (isNearbySearch) map.flyTo(userMarkerLayer.getBounds().getCenter(), 15);
+                    return;
+                }
+
+                
                 clinics.forEach((clinic, index) => {
+                    const status = getServiceStatus(clinic);
+                    const serviceHoursHtml = formatServiceHours(clinic);
+                    const googleMapSearchName = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(clinic.縣市區名)}${encodeURIComponent(clinic.機構名稱)}`;
+                    const li = document.createElement('li');
+                    li.className = 'list-group-item';
+                    const statusClass = status.isOpen ? 'open' : 'closed';
+                    const distanceText = clinic.distance ? `${clinic.distance.toFixed(2)} km` : '';
+                    /*
                     const name = clinic.機構名稱;
                     const address = clinic.地址;
                     const district = clinic.縣市區名;
                     const phone = clinic.電話;
-
-                    const li = document.createElement('li');
-                    li.className = 'list-group-item';
-
-                    const googleMapSearchName = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(district)}${encodeURIComponent(name)}`;
-                    
+                    */
                     li.innerHTML = `
                         <div class="d-flex w-100 justify-content-between">
-                            <h5 class="mb-1">${name}</h5>
+                            <h5 class="mb-1">
+                                <span class="status-dot ${statusClass}" title="${status.text}"></span>
+                                ${clinic.機構名稱}
+                            </h5>
+                            <small class="distance-text">${distanceText}</small>
                         </div>
                         <div class="clinic-item-details">
-                            <p class="mb-1">
-                                <i class="fa-solid fa-location-dot"></i>
-                                <a href="${googleMapSearchName}" target="_blank" rel="noopener noreferrer">${address}</a>
-                            </p>
-                            <p class="mb-0">
-                                <i class="fa-solid fa-phone"></i>
-                                ${phone ? `<a href="tel:${phone}">${phone}</a>` : '未提供'}
-                            </p>
+                            <p class="mb-1"><i class="fa-solid fa-location-dot"></i> <a href="..." target="_blank">${clinic.地址}</a></p>
+                            <p class="mb-1"><i class="fa-solid fa-phone"></i> ${clinic.電話 ? `<a href="tel:${clinic.電話}">${clinic.電話}</a>` : '未提供'}</p>
+                            <p class="mb-1"><i class="fa-solid fa-hospital"></i> ${clinic['特約類別_描述'] || '未分類'}</p>
+                        </div>
+                        <div class="service-hours-container">
+                            ${serviceHoursHtml}
                         </div>
                     `;
 
                     li.dataset.markerIndex = index;
+                    /*
                     li.addEventListener('click', function() {
                         const targetMarker = clinicMarkers[this.dataset.markerIndex];
                         if (targetMarker) {
@@ -666,15 +794,21 @@
                             });
                         }
                     });
+                    */
                     listElement.appendChild(li);
 
                     if (clinic.latitude && clinic.longitude) {
                         // 使用自訂圖標
-                        const marker = L.marker([clinic.latitude, clinic.longitude], { icon: clinicIcon });
+                        const marker = L.marker([clinic.latitude, clinic.longitude], { 
+                            icon: getClinicIcon(clinic, status.isOpen)
+                        });
+                        const popupServiceInfo = getPopupServiceInfo(clinic, status);
                         const popupContent = `
-                            <b>${name}</b><br>
+                            <b>${clinic.機構名稱}</b>
+                            ${popupServiceInfo}
+                            <hr style="margin: 5px 0;">
                             <a href="${googleMapSearchName}" target="_blank" rel="noopener noreferrer" title="在 Google Maps 中開啟"><i class="fa-solid fa-map-location-dot"></i> 導航</a>
-                            ${phone ? ` | <a href="tel:${phone}" title="撥打電話"><i class="fa-solid fa-phone-volume"></i> 通話</a>` : ''}
+                            ${clinic.電話 ? ` | <a href="tel:${clinic.電話}" title="撥打電話"><i class="fa-solid fa-phone-volume"></i> 通話</a>` : ''}
                         `;
                         marker.bindPopup(popupContent);
                         marker.on('mouseover', function (e) { this.openPopup(); });
@@ -687,10 +821,10 @@
                         clinicMarkers.push(null); // 保持索引一致
                     }
                 });
-                // 【修改】一次性將所有 markers 加入 cluster group
+                // 一次性將所有 markers 加入 cluster group
                 markerClusterGroup.addLayers(clinicMarkers.filter(m => m)); // 過濾掉 null 的 marker
 
-                // 【修改】列表點擊事件，改用 cluster group 的方法
+                // 列表點擊事件，改用 cluster group 的方法
                 listElement.querySelectorAll('li').forEach(li => {
                     li.addEventListener('click', function() {
                         const targetMarker = clinicMarkers[this.dataset.markerIndex];
@@ -709,7 +843,7 @@
                 listElement.innerHTML = '<li class="list-group-item text-danger">處理結果時發生錯誤，請查看主控台。</li>';
             }
 
-            // 【修改】調整地圖邊界以適應所有圖標
+            // 調整地圖邊界以適應所有圖標
             const allVisibleLayers = L.featureGroup([...markerClusterGroup.getLayers(), ...userMarkerLayer.getLayers()]);
             if (allVisibleLayers.getLayers().length > 0) {
                  setTimeout(() => {
@@ -745,24 +879,27 @@
 
         // 【核心修改】取消重新分析，回到第二步
         function editStep2() {
+            if (!selectedDepartment) return;
+            resultSection.classList.add('d-none');
             // 顯示第一步的區塊
             step1Body.classList.remove('d-none');
-            
             // 隱藏對話輸入框和 AI 分析結果，但保留對話紀錄
-            chatInputGroup.classList.add('d-none');
-            suggestionResult.classList.add('d-none');
+            //chatInputGroup.classList.add('d-none');
+            //suggestionResult.classList.add('d-none');
             
             // 顯示「是否重新開始」的確認選項
-            restartConfirmation.classList.remove('d-none');
+            // restartConfirmation.classList.remove('d-none');
 
-            // 切換 Header 狀態
-            step1Summary.classList.add('d-none');
-            step1Header.classList.remove('clickable');
 
             // 將第二步收合
             step2Body.classList.add('d-none');
             step2Summary.classList.remove('d-none');
             step2Header.classList.add('clickable');
+
+            // 切換 Header 狀態
+            step1Body.classList.add('d-none');
+            step1Summary.classList.add('d-none');
+            step1Header.classList.remove('clickable');
         }
 
         // 【核心修改】取消重新分析，回到第二步
