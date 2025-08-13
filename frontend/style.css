@@ -266,33 +266,106 @@ body {
 .fa-moon {
     color: #f1c40f;
 }
+/* 【新增】不同類型圖標的樣式 */
+.custom-div-icon {
+    text-align: center;
+    line-height: 30px;
+    border-radius: 50%;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.4);
+    transition: transform 0.2s ease-in-out;
+}
+.custom-div-icon:hover {
+    transform: scale(1.2);
+}
+.custom-div-icon i {
+    color: white;
+}
+.icon-medical-center { background-color: #8E44AD; } /* 紫色 - 醫學中心 */
+.icon-regional-hospital { background-color: #2980B9; } /* 藍色 - 區域醫院 */
+.icon-district-hospital { background-color: #27AE60; } /* 綠色 - 地區醫院 */
+.icon-clinic { background-color: #d35400; } /* 橘色 - 基層院所 */
 
-/* 【新增】RWD 響應式設計調整 */
+.icon-closed {
+    background-color: #7f8c8d !important; /* 灰色 - 休息中 */
+    opacity: 0.7;
+}
+
+/* 【新增】列表中的看診狀態圓點 */
+.status-dot {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    margin-right: 8px;
+    vertical-align: middle;
+}
+.status-dot.open {
+    background-color: #2ecc71; /* 綠色 */
+    box-shadow: 0 0 5px #2ecc71;
+}
+.status-dot.closed {
+    background-color: #95a5a6; /* 灰色 */
+}
+.distance-text {
+    color: var(--secondary-text-color);
+}
+
+/* 【新增】服務時段表格樣式 */
+.service-hours-container {
+    margin-top: 0.75rem;
+    padding-top: 0.75rem;
+    border-top: 1px solid var(--card-border-color);
+}
+.service-hours-table {
+    width: 100%;
+    font-size: 0.8rem;
+    text-align: center;
+}
+.service-hours-table th, .service-hours-table td {
+    padding: 2px 4px;
+}
+.service-hours-table thead th {
+    color: var(--secondary-text-color);
+}
+.service-hours-table td.open {
+    color: #2ecc71;
+    font-weight: bold;
+}
+
+/* RWD 響應式設計調整 */
 @media (max-width: 768px) {
     body {
         padding-top: 1rem;
         padding-bottom: 1rem;
+        font-size: 1.1rem; /* 稍微放大基礎字體 */
     }
     
     .container {
-        padding-left: 1rem;
-        padding-right: 1rem;
+        padding-left: 0.8rem;
+        padding-right: 0.8rem;
     }
 
     h1 {
-        font-size: 1.75rem; /* 縮小主標題 */
+        font-size: 1.8rem; /* 縮小主標題 */
     }
 
     h3 {
-        font-size: 1.5rem; /* 縮小結果標題 */
+        font-size: 1.6rem; /* 縮小結果標題 */
     }
     
     .card-header.fs-5 {
-        font-size: 1.1rem !important; /* 調整卡片標題字體大小 */
+        font-size: 1.2rem !important; /* 調整卡片標題字體大小 */
+        padding: 0.8rem 1rem; /* 增加 Header 的垂直空間 */
     }
 
     .card-body {
         padding: 1rem; /* 縮小卡片內距 */
+    }
+
+    /* 放大輸入框與按鈕 */
+    .form-control, .form-select, .btn {
+        font-size: 1.1rem;
+        padding: 0.6rem 1rem;
     }
 
     /* 讓第二步驟中的所有按鈕都變成滿版，並增加間距 */
@@ -307,13 +380,18 @@ body {
     }
 
     #chat-window {
-        height: 250px; /* 在小螢幕上稍微降低聊天視窗高度 */
+        height: 280px; /* 在小螢幕上稍微降低聊天視窗高度 */
+    }
+
+    .bot-message .message-bubble,
+    .user-message .message-bubble {
+        padding: 0.8rem 1.1rem; /* 加大對話框內距 */
     }
 
     #theme-toggle {
-        width: 40px;
-        height: 40px;
-        font-size: 1.1rem;
+        width: 42px;
+        height: 42px;
+        font-size: 1.2rem;
         top: 0.5rem;
         right: 0.5rem;
     }

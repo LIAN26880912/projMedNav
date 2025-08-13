@@ -1,6 +1,6 @@
 import pandas as pd
 import json
-from math import radians, sin, cos, sqrt, atan2
+from math import radians, sin, cos, sqrt, atan2, isnan
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 import numpy as np
@@ -34,6 +34,8 @@ GEOCODE_API_URL = "https://maps.googleapis.com/maps/api/geocode/json"
 # --- Helper Function ---
 def haversine_distance(lat1, lon1, lat2, lon2):
     """計算兩個經緯度座標之間的直線距離（公里）"""
+    if any(isnan(arg) for arg in [lat1, lon1, lat2, lon2]):
+        return float('inf') # 如果有任何一個座標無效，回傳無限大
     R = 6371  # 地球半徑（公里）
     dLat = radians(lat2 - lat1)
     dLon = radians(lon2 - lon1)
@@ -67,7 +69,7 @@ except Exception as e:
     print(f"讀取 departments_list.json 時發生錯誤: {e}")
     departments_list = []
 
-# 【新增】在伺服器啟動時，載入症狀對照表
+# 在伺服器啟動時，載入症狀對照表
 try:
     with open('symptom_map.json', 'r', encoding='utf-8') as f:
         symptom_map = json.load(f)
@@ -86,44 +88,34 @@ except Exception as e:
 
 
 
-if nlp:
-    try:
-        
-        print("正在載入本地 NLP 模型 (第一次啟動會需要較長時間下載)...")
-        # 使用 "zero-shot-classification" 任務，它可以在沒有特別訓練的情況下，對文本進行分類
-        # 我們選用一個表現優異的中文 RoBERTa 模型
-        nlp_classifier = pipeline("zero-shot-classification", model="hfl/chinese-roberta-wwm-ext")
-        print("NLP 模型載入成功！")
 
-    except Exception as e:
-        print(f"載入 NLP 模型時發生錯誤: {e}")
-        nlp_classifier = None
-else:
-    nlp_classifier = None
-    print("本地 NLP 模型先停用，不然部屬上去的RAM 會爆炸。將依賴關鍵字與 Gemini API。")
 
 # --- API 端點 (Endpoints) ---
-@app.route('/api/geocode', methods=['GET'])
-def geocode_address():
-    """使用 Google Geocoding API 將地址轉換為經緯度"""
-    address = request.args.get('address', '')
+def get_geocode_from_google(address):
+    """從 Google API 取得地址的經緯度"""
     if not address:
-        return jsonify({'error': '請提供地址'}), 400
-    params = { 'address': address, 'key': API_KEY, 'language': 'zh-TW'}
+        return None
+    params = {'address': address, 'key': API_KEY, 'language': 'zh-TW'}
     try:
         res = requests.get(GEOCODE_API_URL, params=params)
         res.raise_for_status()
         data = res.json()
         if data['status'] == 'OK':
-            location = data['results'][0]['geometry']['location']
-            return jsonify(location) # 回傳 {'lat': ..., 'lng': ...}
-        else:
-            return jsonify({'error': f"無法解析地址: {data['status']}"}), 404
+            return data['results'][0]['geometry']['location']
     except Exception as e:
-        # 在後端伺服器控制台印出詳細錯誤，方便自己除錯
-        print(f"Geocoding API 發生錯誤: {e}") 
-        # 【修正】回傳給前端一個通用的、安全的訊息
-        return jsonify({'error': '地理編碼服務暫時無法使用，請稍後再試。'}), 500
+        print(f"Geocoding API 發生錯誤: {e}")
+    return None
+
+@app.route('/api/geocode', methods=['GET'])
+def geocode_address():
+    address = request.args.get('address', '')
+    location = get_geocode_from_google(address)
+    if location:
+        return jsonify(location)
+    else:
+        return jsonify({'error': '無法解析地址'}), 404
+
+
 @app.route('/api/departments', methods=['GET'])
 def get_all_departments():
     try:
@@ -147,6 +139,7 @@ def get_all_districts():
         return jsonify({"error": "找不到地區列表檔案 (admin_districts.json)"}), 404
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
 
 @app.route('/api/validate-answer', methods=['POST'])
 def validate_answer():
@@ -193,23 +186,7 @@ def suggest_department():
     print("關鍵字無匹配，轉交其他模型進行分析...")
 
     # --- 層級 2: 如果關鍵字無匹配，且非雲端部屬模式，則使用本地 NLP 模型 ---
-    if nlp:
-        print("非雲端部屬，檢查 NLP 服務。")
 
-        if not nlp_classifier or not departments_list:
-            return jsonify({"error": "關鍵字無匹配，且 NLP 服務未準備就緒"}), 500
-
-        print("使用本地 NLP 模型進行分析...")
-        result = nlp_classifier(symptom_text, departments_list, multi_label=True)
-        
-        top_label = result['labels'][0]
-        top_score = result['scores'][0]
-
-        CONFIDENCE_THRESHOLD = 0.9  # 設定信心度門檻
-    
-        if top_score >= CONFIDENCE_THRESHOLD:
-            print(f"本地 NLP 分析結果: {top_label} (信心分數: {top_score:.2f})")
-            return jsonify({'departments': [top_label]})
 
     # --- 層級 3: 如果本地模型信心度不足，則請求 Gemini 專家分析 ---
     print("本地 NLP 模型信心度不足，或未使用本地 NLP ，請求 Gemini API 進行分析...")
@@ -217,6 +194,13 @@ def suggest_department():
     return jsonify(gemini_result)      
 
 
+def get_return_columns():
+    """定義所有需要回傳給前端的欄位"""
+    days = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']
+    times = ['am', 'pm', 'eve']
+    service_time_cols = [f"{day}_{time}" for time in times for day in days]
+    base_cols = ['機構名稱', '地址', '縣市區名', '電話', 'latitude', 'longitude', '特約類別_描述']
+    return base_cols + service_time_cols
 
 @app.route('/search', methods=['GET'])
 def search_clinic():
@@ -224,19 +208,41 @@ def search_clinic():
     city_query = request.args.get('city', '')
     district_query = request.args.get('district', '')
     if df.empty or not department_query or not city_query:
-        return jsonify({'error': '資料不完整或伺服器資料讀取失敗'}), 400
+        return jsonify([{'error': '緯度、經度與半徑必須是有效的數字'}]), 400
+
     full_address_prefix = city_query + district_query
+    result_df =  df[df['縣市區名'].str.startswith(full_address_prefix, na=False) & 
+                    df['科別'].str.contains(department_query, na=False)].copy()
 
-    result_df = df[df['縣市區名'].str.startswith(full_address_prefix, na=False)].copy()
-    result_df = result_df[result_df['科別'].str.contains(department_query, na=False)]
-
+    '''
     if not result_df.empty:
         result_df = result_df.dropna(subset=['latitude', 'longitude'])
+    '''
     
+    # 取得行政區中心點來排序
+    center_location = get_geocode_from_google(full_address_prefix)
+    if center_location:
+        center_lat, center_lon = center_location['lat'], center_location['lng']
+        result_df['distance'] = result_df.apply(
+            lambda row: haversine_distance(center_lat, center_lon, row['latitude'], row['longitude']),
+            axis=1
+        )
+        result_df.sort_values(by='distance', inplace=True)
+
+
+    # 選擇需要的欄位並轉換為字典
+    cols_to_return = get_return_columns()
+    # 確保所有需要的欄位都存在
+    for col in cols_to_return:
+        if col not in result_df.columns:
+            result_df[col] = np.nan
+
+    result_df = result_df.replace('', np.nan).fillna('未提供')
+    
+    '''
     if not result_df.empty:
         result_df[result_df.isna()]
         clinics = (result_df[['機構名稱', '地址', '縣市區名', '電話', 'latitude', 'longitude']]
-            .head(100)
             .replace({
                 '地址': {np.nan: '未提供地址', '': '未提供地址'}, 
                 '電話': {np.nan: '未提供電話', '': '未提供電話'}})
@@ -245,9 +251,11 @@ def search_clinic():
 
     else:
         clinics = []
-    
-    print(f"查詢: {full_address_prefix} - {department_query}，找到 {len(clinics)} 筆資料。")
+    '''
 
+    clinics = result_df[cols_to_return].to_dict('records')
+
+    print(f"查詢: {full_address_prefix} - {department_query}，找到 {len(clinics)} 筆資料。")
    
     return jsonify(clinics)
 
@@ -259,17 +267,32 @@ def search_nearby_clinics():
         radius_km = float(request.args.get('radius', 1)) 
         department_query = request.args.get('department', '')
     except (TypeError, ValueError):
-        return jsonify({'error': '緯度、經度與半徑必須是有效的數字'}), 400
+        return jsonify([{'error': '緯度、經度與半徑必須是有效的數字'}]), 400
 
     if df.empty or not department_query:
-        return jsonify({'error': '科別為必填欄位'}), 400
+        return jsonify([{'error': '科別為必填欄位'}]), 400
 
     distances = df.apply(
         lambda row: haversine_distance(user_lat, user_lon, row['latitude'], row['longitude']),
         axis=1
     )
-    nearby_df = df[distances <= radius_km].copy()
-    result_df = nearby_df[nearby_df['科別'].str.contains(department_query, na=False)]
+
+    result_df = df[(distances <= radius_km) & 
+                   (df['科別'].str.contains(department_query, na=False))].copy()
+
+    # 依距離排序
+    result_df['distance'] = distances[result_df.index]
+    result_df.sort_values(by='distance', inplace=True)
+
+    # 選擇需要的欄位並轉換為字典
+    cols_to_return = get_return_columns() + ['distance']
+    for col in cols_to_return:
+        if col not in result_df.columns:
+            result_df[col] = np.nan
+    
+    result_df = result_df.replace('', np.nan).fillna('未提供')
+
+    """
     if not result_df.empty:
         result_df[result_df.isna()]
         clinics = (result_df[['機構名稱', '地址', '縣市區名', '電話', 'latitude', 'longitude']]
@@ -279,8 +302,12 @@ def search_nearby_clinics():
                 '電話': {np.nan: '未提供電話', '': '未提供電話'}})
             .to_dict('records')
         )
+    
     else:
         clinics = []
+    """
+
+    clinics = result_df[cols_to_return].to_dict('records')
         
     print(f"附近查詢: ({user_lat}, {user_lon}) 半徑 {radius_km}km - {department_query}，找到 {len(clinics)} 筆資料。")
     return jsonify(clinics)
