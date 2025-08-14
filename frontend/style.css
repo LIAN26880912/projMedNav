@@ -1,15 +1,17 @@
-/* 【核心修改】使用 CSS 變數來定義顏色主題 */
+/* 使用 CSS 變數來定義顏色主題 */
 :root {
     --bg-color: #f8f9fa;
     --text-color: #212529;
     --secondary-text-color: #6c757d;
     --card-bg: #ffffff;
+    --card-bg-rgb: 255, 255, 255; /* 【修正】新增 RGB 格式的背景色 */
     --card-border-color: rgba(0, 0, 0, 0.175);
     --input-bg: #fff;
     --input-border-color: #ced4da;
     --input-text-color: #495057;
     --list-group-item-bg: #fff;
     --list-group-item-hover-bg: #e9ecef;
+    --list-item-highlight-bg: #dbeafe; /* 【新功能】列表高亮背景色 */
     --bot-message-bg: #e9ecef;
     --bot-message-text-color: #212529;
     --header-bg: #f7f7f7;
@@ -23,6 +25,7 @@ body.dark-mode {
     --secondary-text-color: #adb5bd;
     /* 深色模式下的次要文字顏色 */
     --card-bg: #1e1e1e;
+    --card-bg-rgb: 30, 30, 30; /* 【修正】新增 RGB 格式的背景色 */
     --card-border-color: rgba(255, 255, 255, 0.125);
     --input-bg: #2a2a2a;
     --input-border-color: #444;
@@ -30,6 +33,7 @@ body.dark-mode {
     /* 提高輸入框文字亮度 */
     --list-group-item-bg: #1e1e1e;
     --list-group-item-hover-bg: #333;
+    --list-item-highlight-bg: #2563eb; /* 【新功能】深色模式列表高亮背景色 */
     --bot-message-bg: #3a3a3a;
     /* 稍微調亮機器人對話框背景色，增加區隔 */
     --bot-message-text-color: #f5f5f5;
@@ -103,6 +107,11 @@ a:hover {
     box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
 }
 
+/* 【新功能】讓選項標題顏色跟隨主題 */
+.step-label {
+    color: var(--text-color);
+}
+
 #step2-card.disabled {
     opacity: 0.6;
     pointer-events: none;
@@ -137,7 +146,7 @@ a:hover {
     /* 明確指定文字顏色 */
     border-radius: 15px 15px 15px 0;
     padding: 0.75rem 1rem;
-    max-width: 80%;
+    max-width: 85%;
 }
 
 .user-message {
@@ -213,6 +222,10 @@ a:hover {
 .list-group-item:hover {
     background-color: var(--list-group-item-hover-bg);
 }
+/* 【新功能】列表項目高亮效果 */
+.list-group-item.list-item-highlight {
+    background-color: var(--list-item-highlight-bg);
+}
 
 /* 【列表項目優化】 使用 Flexbox 確保對齊 */
 .list-group-item .d-flex {
@@ -221,27 +234,45 @@ a:hover {
 .list-group-item h5 {
     flex-grow: 1; /* 讓標題佔據多餘空間 */
     margin-right: 1rem; /* 與右側距離文字保持間距 */
+    display: flex; /* 讓燈號和文字對齊 */
+    align-items: center;
 }
 .distance-text {
     color: var(--secondary-text-color);
     white-space: nowrap; /* 避免距離換行 */
 }
 .status-dot {
+    /*
     display: inline-block;
     width: 12px;
     height: 12px;
     border-radius: 50%;
+    vertical-align: middle; 
+    */
     margin-right: 8px;
-    vertical-align: middle; /* 垂直置中對齊文字 */
+    flex-shrink: 0; /* 防止燈號被壓縮 */
 }
 .status-dot.open {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
     background-color: #2ecc71;
     box-shadow: 0 0 5px #2ecc71;
 }
 .status-dot.closed {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
     background-color: #95a5a6;
 }
-
+/* 【新功能】無資料狀態的燈號 */
+.status-dot.no-data {
+    color: #95a5a6;
+    font-size: 1.1rem; /* 調整問號圖示大小 */
+    line-height: 1;
+}
 
 .clinic-item-details {
     font-size: 0.9rem;
@@ -255,7 +286,7 @@ a:hover {
 
 .clinic-item-details a {
     text-decoration: none;
-    color: #0d6efd;
+    color: var(--link-color); /* 使用變數確保顏色一致 */
 }
 
 .clinic-item-details a:hover {
@@ -291,7 +322,12 @@ a:hover {
     color: #2ecc71;
     font-weight: bold;
 }
-
+/* 【新功能】服務時段表中，無資料的問號樣式 */
+.service-hours-table td.no-data-text {
+    color: var(--secondary-text-color);
+    font-weight: normal;
+    font-style: italic;
+}
 
 #map {
     height: 450px;
@@ -311,7 +347,8 @@ a:hover {
     top: 10px;
     right: 10px;
     z-index: 401;
-    background: rgba(var(--card-bg-rgb, 255, 255, 255), 0.9); /* 使用帶透明度的背景 */
+    /* 【修正】使用定義好的 --card-bg-rgb 變數 */
+    background: rgba(var(--card-bg-rgb), 0.9);
     backdrop-filter: blur(2px); /* 毛玻璃效果 */
     padding: 5px 10px;
     border-radius: 5px;
@@ -344,6 +381,15 @@ a:hover {
     box-shadow: 0 3px 14px rgba(0,0,0,0.4);    
 }
 
+/* 【新功能】讓 Popup 標題可點擊 */
+.popup-title {
+    cursor: pointer;
+    font-weight: bold;
+}
+.popup-title:hover {
+    color: var(--link-color);
+}
+
 /* 【Popup 優化】讓連結更像按鈕 */
 .leaflet-popup-content a {
     text-decoration: none;
@@ -362,34 +408,42 @@ a:hover {
 
 .popup-status-open { color: #2ecc71; font-weight: bold; }
 .popup-status-closed { color: var(--secondary-text-color); }
+/* 【新功能】Popup 中無資料的狀態文字 */
+.popup-status-no-data { color: var(--secondary-text-color); font-style: italic; }
 
 
 /* --- 自訂地圖圖標 --- */
 .custom-div-icon {
-    text-align: center;
-    line-height: 30px;
     border-radius: 50%;
     box-shadow: 0 2px 5px rgba(0,0,0,0.4);
-    transition: transform 0.2s ease-in-out, box-shadow 0.2s;
-    border: 2px solid rgba(255,255,255,0.7); /* 增加白色邊框，讓圖標更突出 */
+    transition: transform 0.2s ease-in-out, box-shadow 0.2s, filter 0.2s;
+    border: 2px solid rgba(255,255,255,0.7);
+    display: flex;
+    justify-content: center;
+    align-items: center;
 }
 .custom-div-icon:hover {
     transform: scale(1.2);
     box-shadow: 0 4px 8px rgba(0,0,0,0.5);
 }
+/* 【修改】讓圖示大小根據父層大小自動調整 */
 .custom-div-icon i {
     color: white;
-    font-size: 14px; /* 微調圖示大小 */
-    line-height: 30px; /* 確保垂直置中 */
 }
+
 .icon-medical-center { background-color: #8E44AD; } /* 紫色 - 醫學中心 */
 .icon-regional-hospital { background-color: #2980B9; } /* 藍色 - 區域醫院 */
 .icon-district-hospital { background-color: #27AE60; } /* 綠色 - 地區醫院 */
 .icon-clinic { background-color: #d35400; } /* 橘色 - 基層院所 */
-
+.icon-user-location { background-color: #0275d8;} /* 新增使用者位置圖標顏色 */
 .icon-closed {
-    background-color: #7f8c8d !important; /* 灰色 - 休息中 */
+    filter: grayscale(100%);
     opacity: 0.7;
+}
+/* 【新功能】無資料狀態的地圖圖標 */
+.icon-no-data {
+    background-color: #505050 !important; /* 使用更深的灰色區別 */
+    opacity: 0.9;
 }
 
 /* --- 主題切換按鈕 --- */
@@ -489,11 +543,12 @@ a:hover {
         top: 0.5rem;
         right: 0.5rem;
     }    /* 確保地址輸入框與按鈕能正確堆疊 */
-    /*
-    #step2-content .row > div {
-        padding-bottom: 0.5rem;
+    
+    /* 【修正】讓地圖控制器在窄版面可以換行 */
+    #map-controls-container {
+        flex-wrap: wrap;
+        gap: 5px; /* 增加項目間距 */
     }
-    */
 
 
 }
