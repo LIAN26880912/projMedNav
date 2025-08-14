@@ -26,7 +26,7 @@
     <div class="container">
         <h1 class="mb-4 text-center">找醫生 - 智慧醫療導航</h1>
 
-        <!-- 第一層：決定科別 -> 改為對話介面 -->
+        <!-- Step 1: Chatbot -->
         <div class="card mb-4" id="step1-card">
             <div class="card-header fs-5 fw-bold" id="step1-header">
                 第一步：智慧問答
@@ -36,7 +36,7 @@
                 <!-- 將對話介面與重新分析選項包裝起來 -->
                 <div id="chat-container">
                     <div id="chat-window"></div>
-                    <!-- 【修改】為輸入區塊加上 ID，方便控制顯示/隱藏 -->
+                    <!-- 為輸入區塊加上 ID，方便控制顯示/隱藏 -->
                     <div class="input-group" id="chat-input-group">
                         <input type="text" id="chat-input" class="form-control" placeholder="請在這裡輸入..." disabled>
                         <button id="chat-send-btn" class="btn btn-primary" disabled>傳送</button>
@@ -51,7 +51,7 @@
             </div>
         </div>
 
-        <!-- 【核心修改】第二層：決定地點 -->
+        <!-- Step 2: Location  -->
         <div class="card mb-4 disabled" id="step2-card">
             <div class="card-header fs-5 fw-bold" id="step2-header">
                 第二步：您想在哪裡找？
@@ -61,15 +61,15 @@
                 <div id="step2-instruction" class="alert alert-info">請先在第一步選擇科別</div>
                 <div id="step2-content" class="d-none">
                     <div class="row g-3 align-items-end mb-4">
-                        <div class="col-md-4"><label for="city-select" class="form-label"><b>選項 A:</b> 依地區</label><select id="city-select" class="form-select"></select></div>
+                        <div class="col-md-4"><label for="city-select" class="form-label step-label"><b>選項 A:</b> 依地區</label><select id="city-select" class="form-select"></select></div>
                         <div class="col-md-4"><label for="district-select" class="form-label">&nbsp;</label><select id="district-select" class="form-select"></select></div>
                         <div class="col-md-auto"><button onclick="searchClinicsByArea()" class="btn btn-primary w-100">搜尋</button></div>
                     </div>
                     <hr>
                     <div class="row g-3 align-items-end mb-2">
-                        <div class="col-md-4"><label for="radius-select" class="form-label"><b>選項 B:</b> 依我附近 (半徑)</label><select id="radius-select" class="form-select"><option value="1">1 km</option><option value="3" selected>3 km</option><option value="5">5 km</option></select></div>
+                        <div class="col-md-4"><label for="radius-select" class="form-label step-label"><b>選項 B:</b> 依我附近 (半徑)</label><select id="radius-select" class="form-select"><option value="1">1 km</option><option value="3" selected>3 km</option><option value="5">5 km</option></select></div>
                         <div class="col-md-auto"><button onclick="searchClinicsNearby()" class="btn btn-success">取得我的位置</button></div>
-                        <div class="col-md-auto"><button id="map-select-btn" onclick="activateMapClickSearch()" class="btn btn-outline-info">在地圖上選取</button></div>
+                        <div class="col-md-auto"><button id="map-select-btn" onclick="toggleMapClickSearch()" class="btn btn-outline-info">在地圖上選取</button></div>
                     </div>
                     <div class="row g-3 align-items-end">
                             <div class="col-md-8"><input type="text" id="address-input" class="form-control" placeholder="或輸入地址作為中心點"></div>
@@ -79,11 +79,21 @@
             </div>
         </div>
         
-        <!-- 第三層：結果顯示 -->
+        <!-- Step 3: Result -->
         <div id="result-section" class="d-none">
             <hr>
             <h3 class="mb-3">搜尋結果</h3>
-            <div id="map"></div>
+            <!-- 將地圖與控制器包裝在一個容器中 -->
+            <div id="map-container">
+                <div id="map-controls-container">
+                    <label for="map-style-select">地圖樣式:</label>
+                    <select id="map-style-select" class="form-select form-select-sm"></select>
+                    <button id="recenter-map-btn" class="btn btn-light btn-sm ms-2 d-none" title="回到搜尋中心">
+                        <i class="fa-solid fa-crosshairs"></i>
+                    </button>
+                </div>
+                <div id="map"></div>
+            </div>
             <ul id="clinic-list" class="list-group mt-3 mb-5"></ul>
         </div>
     </div>
@@ -103,16 +113,57 @@
         let selectedDepartment = null, selectedLocationInfo = '';
         const markerClusterGroup = L.markerClusterGroup({ maxClusterRadius: 10 });
         let clinicMarkers = [];
+        let mapCenterInfo = null;
+        let isMapSelectModeActive = false;
+
+        // 新增地圖底圖相關變數
+        let currentTileLayer = null;
+        const tileLayers = {
+            cartoLight: {
+                name: 'CartoDB 亮色',
+                url: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
+                options: {
+                    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+                    subdomains: 'abcd',
+                    maxZoom: 20
+                },
+                isDark: false // 標記為亮色底圖
+            },
+            cartoDark: {
+                name: 'CartoDB 暗色',
+                url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+                options: {
+                    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+                    subdomains: 'abcd',
+                    maxZoom: 20
+                },
+                isDark: true // 標記為暗色底圖
+            },
+            osm: {
+                name: '標準 (OSM)',
+                url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+                options: {
+                    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                },
+                isDark: false
+            },
+            hot: {
+                name: '高對比 (HOT)',
+                url: 'https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png',
+                options: {
+                    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, Tiles style by <a href="https://www.hotosm.org/" target="_blank">HOT</a>'
+                },
+                isDark: false
+            }
+        };
 
         // --- DOM 元素 ---
         const themeToggle = document.getElementById('theme-toggle');
         const citySelect = document.getElementById('city-select');
         const districtSelect = document.getElementById('district-select');
-        // const deptSelect = document.getElementById('dept-select');
         const radiusSelect = document.getElementById('radius-select');
-        // const symptomInput = document.getElementById('symptom-input');
-        // const addressInput = document.getElementById('address-input');
         const mapSelectBtn = document.getElementById('map-select-btn');
+        const mapContainer = document.getElementById('map-container');
         
         const step1Card = document.getElementById('step1-card');
         const step1Header = document.getElementById('step1-header');
@@ -127,6 +178,7 @@
         const step2Content = document.getElementById('step2-content');
         
         const resultSection = document.getElementById('result-section');
+        const recenterMapBtn = document.getElementById('recenter-map-btn');
 
         // --- 對話系統變數 ---
         const chatContainer = document.getElementById('chat-container');
@@ -164,24 +216,61 @@
 
         
         // 監聽事件
-        step1Header.addEventListener('click', editStep1);
-        step2Header.addEventListener('click', editStep2);
+        // step1Header.addEventListener('click', editStep1);
+        // step2Header.addEventListener('click', editStep2);
+        document.addEventListener('DOMContentLoaded', onPageLoad);
+        themeToggle.addEventListener('click', toggleTheme);
+        step1Header.addEventListener('click', () => handleHeaderClick(1));
+        step2Header.addEventListener('click', () => handleHeaderClick(2));
+
         citySelect.addEventListener('change', e => updateDistrictOptions(e.target.value));
-        //deptSelect.addEventListener('change', e => enableStep2(e.target.value));
         // 處理使用者訊息傳送
         chatSendBtn.addEventListener('click', handleUserMessage);
         chatInput.addEventListener('keypress', function(e) {
             if (e.key === 'Enter') handleUserMessage();
         });
+        // 【新功能】監聽地圖置中按鈕
+        recenterMapBtn.addEventListener('click', recenterMap);
 
+        // --- 初始化函式 ---
+        function onPageLoad() {
+            loadDistricts();
+            startChat();
+            const savedTheme = localStorage.getItem('theme');
+            if (savedTheme === 'dark') {
+                document.body.classList.add('dark-mode');
+                themeToggle.innerHTML = '<i class="fas fa-moon"></i>';
+            } else {
+                themeToggle.innerHTML = '<i class="fas fa-sun"></i>';
+            }
+        }
+
+        function toggleTheme() {
+            document.body.classList.toggle('dark-mode');
+            const mapStyleSelect = document.getElementById('map-style-select');
+            if (document.body.classList.contains('dark-mode')) {
+                localStorage.setItem('theme', 'dark');
+                themeToggle.innerHTML = '<i class="fas fa-moon"></i>';
+                if (map) {
+                    changeMapLayer('cartoDark');
+                    mapStyleSelect.value = 'cartoDark';
+                }
+            } else {
+                localStorage.setItem('theme', 'light');
+                themeToggle.innerHTML = '<i class="fas fa-sun"></i>';
+                if (map) {
+                    changeMapLayer('cartoLight');
+                    mapStyleSelect.value = 'cartoLight';
+                }
+            }
+        }
+        /*
+        // 切換主題 
         document.addEventListener('DOMContentLoaded', function() {
             // loadDepartments();
             loadDistricts();
             startChat();
-        });
 
-        // 切換主題 
-        document.addEventListener('DOMContentLoaded', function() {
             // 【新增】檢查並應用儲存的主題
             const savedTheme = localStorage.getItem('theme');
             if (savedTheme === 'dark') {
@@ -192,17 +281,27 @@
             }
         });
 
-        // 【新增】主題切換事件監聽
+        // 主題切換事件監聽
         themeToggle.addEventListener('click', () => {
             document.body.classList.toggle('dark-mode');
+            const mapStyleSelect = document.getElementById('map-style-select');
             if (document.body.classList.contains('dark-mode')) {
                 localStorage.setItem('theme', 'dark');
                 themeToggle.innerHTML = '<i class="fas fa-moon"></i>';
+                if (map) { // 確保地圖已初始化
+                    changeMapLayer('cartoDark');
+                    mapStyleSelect.value = 'cartoDark';
+                }
             } else {
                 localStorage.setItem('theme', 'light');
                 themeToggle.innerHTML = '<i class="fas fa-sun"></i>';
+                if (map) {
+                    changeMapLayer('cartoLight');
+                    mapStyleSelect.value = 'cartoLight';
+                }
             }
         });
+        */
         
         // 啟動對話流程
         function startChat() {
@@ -414,10 +513,52 @@
         function initializeMap() {
             if (!map) {
                 map = L.map('map').setView([25.033, 121.565], 11);
-                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' }).addTo(map);
+
+                // 設定地圖樣式選擇器
+                const mapStyleSelect = document.getElementById('map-style-select');
+                for (const styleKey in tileLayers) {
+                    const option = document.createElement('option');
+                    option.value = styleKey;
+                    option.textContent = tileLayers[styleKey].name;
+                    mapStyleSelect.appendChild(option);
+                }
+
+                // 監聽選擇器的變更事件
+                mapStyleSelect.addEventListener('change', (e) => {
+                    changeMapLayer(e.target.value);
+                });
+
+                // 根據當前主題設定初始圖層
+                const currentTheme = document.body.classList.contains('dark-mode') ? 'dark' : 'light';
+                const initialLayerKey = currentTheme === 'dark' ? 'cartoDark' : 'cartoLight';
+                changeMapLayer(initialLayerKey);
+                mapStyleSelect.value = initialLayerKey;
+
+                // L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' }).addTo(map);
                 // 【修改】將 markerClusterGroup 加入地圖
                 map.addLayer(markerClusterGroup);
                 userMarkerLayer = L.featureGroup().addTo(map);
+            }
+        }
+
+
+        //切換地圖底圖，並智能判斷是否套用濾鏡
+        function changeMapLayer(layerKey) {
+            if (currentTileLayer) {
+                map.removeLayer(currentTileLayer);
+            }
+            const layerInfo = tileLayers[layerKey];
+            currentTileLayer = L.tileLayer(layerInfo.url, layerInfo.options);
+            currentTileLayer.addTo(map);
+
+            // 智能判斷是否需要套用CSS濾鏡
+            const tilePane = currentTileLayer.getContainer();
+            if (document.body.classList.contains('dark-mode') && !layerInfo.isDark) {
+                // 如果是暗黑模式，且地圖本身不是暗色系，則套用濾鏡
+                tilePane.classList.add('map-force-dark');
+            } else {
+                // 其他情況則移除濾鏡
+                tilePane.classList.remove('map-force-dark');
             }
         }
         
@@ -525,9 +666,6 @@
             }
         }
 
-
-
-
         function searchClinicsByArea() {
             if (!selectedDepartment) return alert('請先在第一步選擇科別。');
             const city = citySelect.value;
@@ -571,14 +709,49 @@
             }
         }
 
+        // --- 【新功能】地圖選取模式相關函式 ---
+        const handleMapClickForSearch = (e) => {
+            selectedLocationInfo = '地點：地圖選取點';
+            searchFromCoordinates(e.latlng.lat, e.latlng.lng);
+            deactivateMapClickSearch();
+        };
+
+        // 【修正】這是 Esc 鍵的專用處理器
+        const handleEscapeKeyForSearch = (e) => {
+            if (e.key === "Escape") {
+                deactivateMapClickSearch();
+            }
+        };
+
+        function toggleMapClickSearch() {
+            if (isMapSelectModeActive) {
+                deactivateMapClickSearch();
+            } else {
+                activateMapClickSearch();
+            }
+        }
+
         function activateMapClickSearch() {
             if (!selectedDepartment) return alert('請先在第一步選擇科別。');
-            selectedLocationInfo = '地點：地圖選取點';
-            resultSection.classList.remove('d-none');
 
-            initializeMap();
+            // 如果結果區塊還沒顯示，就先顯示它並初始化地圖
+            if (resultSection.classList.contains('d-none')) {
+                resultSection.classList.remove('d-none');
+                initializeMap();
+            }
+
+            isMapSelectModeActive = true;
             map.getContainer().classList.add('map-click-mode');
-            mapSelectBtn.textContent = '請在地圖上點選位置...';
+            mapSelectBtn.textContent = '取消點選 (或按 Esc)';
+            mapSelectBtn.classList.replace('btn-outline-info', 'btn-warning');
+            // 使用 'on' 來註冊可移除的事件處理器
+            map.on('click', handleMapClickForSearch);
+            document.addEventListener('keydown', handleEscapeKeyForSearch);
+
+            // 提示使用者
+            mapContainer.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+            /*
             mapSelectBtn.disabled = true; // 暫時禁用按鈕避免重複點擊
             map.once('click', function(e) {
                 searchFromCoordinates(e.latlng.lat, e.latlng.lng);
@@ -586,6 +759,20 @@
                 mapSelectBtn.textContent = '在地圖上選取中心點';
                 mapSelectBtn.disabled = false;
             });
+            */
+        }
+
+        function deactivateMapClickSearch() {
+            if (!isMapSelectModeActive) return; // 如果不是在點選模式中，就直接返回
+            
+            isMapSelectModeActive = false;
+            if(map) {
+                map.getContainer().classList.remove('map-click-mode');
+                map.off('click', handleMapClickForSearch); // 移除監聽器
+            }
+            mapSelectBtn.textContent = '在地圖上選取';
+            mapSelectBtn.classList.replace('btn-warning', 'btn-outline-info');
+            document.removeEventListener('keydown', handleEscapeKeyForSearch);
         }
         
         function searchFromCoordinates(lat, lon) {
@@ -595,55 +782,109 @@
             const url = `${URL}/search/nearby?lat=${lat}&lon=${lon}&radius=${radius}&department=${selectedDepartment}`;
             
             userMarkerLayer.clearLayers();
-            // 【修改】使用自訂圖標
-            L.marker([lat, lon], { icon: userIcon }).addTo(userMarkerLayer).bindPopup('搜尋中心點').openPopup();
+            const userIcon = L.divIcon({
+                html: '<i class="fa-solid fa-street-view"></i>',
+                className: 'custom-div-icon icon-user-location',
+                iconSize: [30, 30]
+            });
+            // 【新功能】設定圖標可拖曳
+            const userMarker = L.marker([lat, lon], { icon: userIcon, draggable: true }).addTo(userMarkerLayer);
+            
+            // 【新功能】加入拖曳結束事件
+            userMarker.on('dragend', function(event) {
+                const position = event.target.getLatLng();
+                selectedLocationInfo = '地點：地圖拖曳點';
+                searchFromCoordinates(position.lat, position.lng);
+            });
+
+            // 儲存使用者位置
+            mapCenterInfo = { type: 'user', layer: userMarker };
             fetchAndDisplayClinics(url, true);
         }
 
 
-        /* --- 【核心修改】圖標與服務時間相關函式 --- */
+        /* --- 圖標與服務時間相關函式 --- */
 
-        //根據特約類別和看診狀態，產生對應的 Leaflet 圖標
-        function getClinicIcon(clinic, isOpen) {
-            let iconHtml = '<i class="fa-solid fa-house-medical"></i>'; // 預設圖示
-            let className = 'custom-div-icon ';
-            const type = clinic['特約類別_描述'] || '基層院所';
+        // 【修改】根據特約類別和看診狀態，產生對應的 Leaflet 圖標 (包含大小)
+        function getClinicIcon(clinic, status) {
+            // let iconHtml = '<i class="fa-solid fa-house-medical"></i>'; // 預設圖示
+            let iconHtml, className = 'custom-div-icon ', iconSize, innerIconSize;
+            const type = clinic['特約類別_描述'] || '其他或未提供';
 
             if (type.includes('醫學中心')) {
-                iconHtml = '<i class="fa-solid fa-hospital"></i>';
                 className += 'icon-medical-center';
+                iconSize = [50, 50];
+                innerIconSize = 25;
             } else if (type.includes('區域醫院')) {
-                iconHtml = '<i class="fa-solid fa-hospital-user"></i>';
                 className += 'icon-regional-hospital';
+                iconSize = [40, 40];
+                innerIconSize = 20;
             } else if (type.includes('地區醫院')) {
-                iconHtml = '<i class="fa-solid fa-house-medical-flag"></i>';
                 className += 'icon-district-hospital';
+                iconSize = [35, 35];
+                innerIconSize = 18;
             } else { // 基層院所
                 className += 'icon-clinic';
+                iconSize = [25, 25];
+                innerIconSize = 13;
             }
 
-            // 根據看診狀態決定是否加上 'closed' 樣式
-            if (!isOpen) {
+            // 決定基礎圖示的 class
+            let iconClass = 'fa-solid ';
+            if      (type.includes('醫學中心')) iconClass += 'fa-hospital';
+            else if (type.includes('區域醫院')) iconClass += 'fa-house-medical-flag';
+            else if (type.includes('地區醫院')) iconClass += 'fa-house-chimney-medical';
+            else if (type.includes('基層院所')) iconClass += 'fa-house-medical';
+            else if (type.includes('未提供'))   iconClass += 'fa-square-plus'; 
+            else                               iconClass += 'fa-square-plus'; 
+
+            // 根據狀態決定最終樣式
+            if (status.status === 'closed') {
                 className += ' icon-closed';
+            } else if (status.status === 'no-data') {
+                iconClass = 'fa-solid fa-square-plus'; // 無資料時，覆蓋為問號
+                className += ' icon-no-data';
             }
+
+            // 【邏輯修改】將動態計算的字體大小寫入 inline style
+            iconHtml = `<i class="${iconClass}" style="font-size: ${innerIconSize}px;"></i>`;
 
             return L.divIcon({
                 html: iconHtml,
                 className: className,
-                iconSize: [30, 30],
-                iconAnchor: [15, 15],
-                popupAnchor: [0, -15]
+                iconSize: iconSize,
+                iconAnchor: [iconSize[0] / 2, iconSize[1] / 2], // 中心點對齊
+                popupAnchor: [0, -iconSize[1] / 2] // 彈出視窗位置
             });
         }
 
         //根據當前時間判斷診所是否營業
         function getServiceStatus(clinic) {
+            const days = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
+            const times = ['am', 'pm', 'eve'];
+            
+            // 步驟 1: 檢查是否有任何有效的服務時段資料
+            let hasServiceData = true;
+            for (const day of days) {
+                for (const time of times) {
+                    const timeSlotData = clinic[`${day}_${time}`];
+                    if (timeSlotData == null || timeSlotData === '未提供') {
+                        hasServiceData = false;
+                        break;
+                    }
+                }
+                if (!hasServiceData) break;
+            }
+
+            if (!hasServiceData) {
+                return { status: 'no-data', text: "無看診時段資訊" };
+            }
+            
+            // 步驟 2: 如果有資料，再判斷當下是否營業
             const now = new Date();
             const dayOfWeek = now.getDay(); // 0=週日, 1=週一, ..., 6=週六
             const hour = now.getHours();
-            
-            const daysMap = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
-            const currentDay = daysMap[dayOfWeek];
+            const currentDay = days[dayOfWeek];
             
             let timeSlot = '';
             if (hour >= 8 && hour < 12) timeSlot = 'am';
@@ -651,14 +892,14 @@
             else if (hour >= 18 && hour < 22) timeSlot = 'eve';
             
             if (!timeSlot) {
-                return { isOpen: false, text: "休息中" };
+                return { status: 'closed', text: "休息中" };
             }
 
             const statusCol = `${currentDay}_${timeSlot}`;
             const isOpen = clinic[statusCol] === 1;
 
             return {
-                isOpen: isOpen,
+                status: isOpen ? 'open' : 'closed',
                 text: isOpen ? "看診中" : "休息中"
             };
         }
@@ -674,7 +915,21 @@
                 days.forEach(day => {
                     const colName = `${day}_${time.key}`;
                     const isOpen = clinic[colName] === 1;
-                    html += `<td class="${isOpen ? 'open' : ''}">${isOpen ? '●' : '—'}</td>`;
+                    const isDataProvided = clinic[colName] !== '未提供';
+                    // 根據是否有資料和是否營業來決定顯示內容
+                    let cellContent = '—';
+                    let cellClass = '';
+                    if (isDataProvided) {
+                        if (isOpen) {
+                            cellContent = '●';
+                            cellClass = 'open';
+                        }
+                    } else {
+                        cellContent = '?';
+                        cellClass = 'no-data-text';
+                    }
+                    
+                    html += `<td class="${cellClass}">${cellContent}</td>`;
                 });
                 html += '</tr>';
             });
@@ -685,23 +940,28 @@
 
 
         function getPopupServiceInfo(clinic, status) {
-            const now = new Date();
-            const dayOfWeek = now.getDay();
-            const hour = now.getHours();
-            const daysMap = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
-            const dayNames = ['週日', '週一', '週二', '週三', '週四', '週五', '週六'];
-            const timesMap = [
-                { key: 'am', name: '上午診' },
-                { key: 'pm', name: '下午診' },
-                { key: 'eve', name: '晚上診' }
-            ];
-            if (status.isOpen) {
+            if (status.status === 'no-data') {
+                return `<br><span class="popup-status-no-data">無看診時段資訊</span>`;
+            }
+
+            if (status.status === 'open') {
+                const hour = new Date().getHours();
                 let currentSession = '';
-                if (hour >= 8 && hour < 12) currentSession = '上午診';
+                if      (hour >=  8 && hour < 12) currentSession = '上午診';
                 else if (hour >= 14 && hour < 18) currentSession = '下午診';
                 else if (hour >= 18 && hour < 22) currentSession = '晚上診';
                 return `<br><span class="popup-status-open">今日 ${currentSession} 服務中</span>`;
             } else {
+                const now = new Date();
+                const dayOfWeek = now.getDay();
+                const hour = now.getHours();
+                const daysMap = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
+                const dayNames = ['週日', '週一', '週二', '週三', '週四', '週五', '週六'];
+                const timesMap = [
+                    { key: 'am', name: '上午診' },
+                    { key: 'pm', name: '下午診' },
+                    { key: 'eve', name: '晚上診' }
+                ];
                 for (let i = 0; i < 7; i++) {
                     const checkDayIndex = (dayOfWeek + i) % 7;
                     const checkDayKey = daysMap[checkDayIndex];
@@ -712,8 +972,16 @@
                             if (time.key === 'eve' && hour >= 22) continue;
                         }
                         const colName = `${checkDayKey}_${time.key}`;
-                        if (clinic[colName] === 1) {
-                            return `<br><span class="popup-status-closed">下次看診: ${dayNames[checkDayIndex]} ${time.name}</span>`;
+                        if (clinic[colName] == 1) {
+                            let dayLabel = '';
+                            if (i === 0) {
+                                dayLabel = '今天';
+                            } else if (i === 1) {
+                                dayLabel = '明天';
+                            } else {
+                                dayLabel = dayNames[checkDayIndex];
+                            }
+                            return `<br><span class="popup-status-closed">下次看診: ${dayLabel} ${time.name}</span>`;
                         }
                     }
                 }
@@ -723,6 +991,7 @@
 
         async function fetchAndDisplayClinics(url, isNearbySearch = false) {
             resultSection.classList.remove('d-none');
+            recenterMapBtn.classList.add('d-none'); // 先隱藏按鈕
             initializeMap();
 
             const listElement = document.getElementById('clinic-list');
@@ -756,26 +1025,32 @@
                     const status = getServiceStatus(clinic);
                     const serviceHoursHtml = formatServiceHours(clinic);
                     const googleMapSearchName = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(clinic.縣市區名)}${encodeURIComponent(clinic.機構名稱)}`;
+
                     const li = document.createElement('li');
                     li.className = 'list-group-item';
-                    const statusClass = status.isOpen ? 'open' : 'closed';
+                    li.id = `list-item-${index}`; // 給列表項一個 ID 
+
+                    // 【修改】根據新的 status.status 決定燈號圖示
+                    let statusIndicatorHtml = '';
+                    if (status.status === 'no-data') {
+                        statusIndicatorHtml = `<i class="fa-solid fa-circle-question status-dot no-data" title="${status.text}"></i>`;
+                    } else {
+                        const statusClass = status.status === 'open' ? 'open' : 'closed';
+                        statusIndicatorHtml = `<span class="status-dot ${statusClass}" title="${status.text}"></span>`;
+                    }
+                    
                     const distanceText = clinic.distance ? `${clinic.distance.toFixed(2)} km` : '';
-                    /*
-                    const name = clinic.機構名稱;
-                    const address = clinic.地址;
-                    const district = clinic.縣市區名;
-                    const phone = clinic.電話;
-                    */
+
                     li.innerHTML = `
                         <div class="d-flex w-100 justify-content-between">
                             <h5 class="mb-1">
-                                <span class="status-dot ${statusClass}" title="${status.text}"></span>
+                                ${statusIndicatorHtml}
                                 ${clinic.機構名稱}
                             </h5>
                             <small class="distance-text">${distanceText}</small>
                         </div>
                         <div class="clinic-item-details">
-                            <p class="mb-1"><i class="fa-solid fa-location-dot"></i> <a href="..." target="_blank">${clinic.地址}</a></p>
+                            <p class="mb-1"><i class="fa-solid fa-location-dot"></i> <a href="${googleMapSearchName}" target="_blank">${clinic.地址}</a></p>
                             <p class="mb-1"><i class="fa-solid fa-phone"></i> ${clinic.電話 ? `<a href="tel:${clinic.電話}">${clinic.電話}</a>` : '未提供'}</p>
                             <p class="mb-1"><i class="fa-solid fa-hospital"></i> ${clinic['特約類別_描述'] || '未分類'}</p>
                         </div>
@@ -800,11 +1075,11 @@
                     if (clinic.latitude && clinic.longitude) {
                         // 使用自訂圖標
                         const marker = L.marker([clinic.latitude, clinic.longitude], { 
-                            icon: getClinicIcon(clinic, status.isOpen)
+                            icon: getClinicIcon(clinic, status)
                         });
                         const popupServiceInfo = getPopupServiceInfo(clinic, status);
                         const popupContent = `
-                            <b>${clinic.機構名稱}</b>
+                            <b class="popup-title" onclick="focusOnListItem(${index})">${clinic.機構名稱}</b>
                             ${popupServiceInfo}
                             <hr style="margin: 5px 0;">
                             <a href="${googleMapSearchName}" target="_blank" rel="noopener noreferrer" title="在 Google Maps 中開啟"><i class="fa-solid fa-map-location-dot"></i> 導航</a>
@@ -823,8 +1098,10 @@
                 });
                 // 一次性將所有 markers 加入 cluster group
                 markerClusterGroup.addLayers(clinicMarkers.filter(m => m)); // 過濾掉 null 的 marker
+                
 
                 // 列表點擊事件，改用 cluster group 的方法
+                /*
                 listElement.querySelectorAll('li').forEach(li => {
                     li.addEventListener('click', function() {
                         const targetMarker = clinicMarkers[this.dataset.markerIndex];
@@ -836,13 +1113,39 @@
                         }
                     });
                 });
+                */
+                listElement.querySelectorAll('li[data-marker-index]').forEach(li => {
+                    li.addEventListener('click', function() {
+                        focusOnMapMarker(this.dataset.markerIndex);
+                    });
+                });
+                
+                // 【新功能】設定地圖中心點資訊
+                if (!isNearbySearch) {
+                    // 如果是區域搜尋，中心點是所有 markers 的範圍
+                    if (markerClusterGroup.getLayers().length > 0) {
+                        mapCenterInfo = { type: 'bounds', bounds: markerClusterGroup.getBounds() };
+                    }
+                } // isNearbySearch 的 mapCenterInfo 在 searchFromCoordinates 中已設定
 
+                // 調整地圖邊界
+                if (mapCenterInfo && mapCenterInfo.type === 'bounds') {
+                     setTimeout(() => map.flyToBounds(mapCenterInfo.bounds.pad(0.1)), 100);
+                } else if (mapCenterInfo && mapCenterInfo.type === 'user') {
+                     const allMarkers = markerClusterGroup.getLayers();
+                     const bounds = allMarkers.length > 0 ? markerClusterGroup.getBounds() : L.latLngBounds();
+                     bounds.extend(mapCenterInfo.layer.getLatLng());
+                     setTimeout(() => map.flyToBounds(bounds.pad(0.1)), 100);
+                }
+                
+                // 【新功能】顯示置中按鈕
+                if(mapCenterInfo) recenterMapBtn.classList.remove('d-none');
             }
             catch (e) {
                 console.error("在處理診所列表時發生錯誤:", e);
                 listElement.innerHTML = '<li class="list-group-item text-danger">處理結果時發生錯誤，請查看主控台。</li>';
             }
-
+            /*
             // 調整地圖邊界以適應所有圖標
             const allVisibleLayers = L.featureGroup([...markerClusterGroup.getLayers(), ...userMarkerLayer.getLayers()]);
             if (allVisibleLayers.getLayers().length > 0) {
@@ -851,79 +1154,127 @@
                     map.flyToBounds(markerClusterGroup.getBounds().pad(0.1));
                 }, 100);
             }
+            */
+        }
+
+        // 點擊列表，聚焦地圖圖標
+        function focusOnMapMarker(index) {
+            const targetMarker = clinicMarkers[index];
+            if (!targetMarker) return;
+            markerClusterGroup.zoomToShowLayer(targetMarker, () => targetMarker.openPopup());
+            mapContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
         
+        // 【新功能】點擊 Popup，聚焦列表項目
+        function focusOnListItem(index) {
+            const listItem = document.getElementById(`list-item-${index}`);
+            if (!listItem) return;
+            listItem.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            listItem.classList.add('list-item-highlight');
+            setTimeout(() => listItem.classList.remove('list-item-highlight'), 1500);
+        }
+
+        // 【新功能】地圖置中函式
+        function recenterMap() {
+            if (!map || !mapCenterInfo) return;
+            if (mapCenterInfo.type === 'bounds') map.flyToBounds(mapCenterInfo.bounds.pad(0.1));
+            else if (mapCenterInfo.type === 'user') map.flyTo(mapCenterInfo.layer.getLatLng(), 15);
+        }
+        // 統一 Header 點擊處理函式
+        function handleHeaderClick(stepNumber) {
+            // 如果該步驟不可點擊 (例如還沒選科別)，則不執行任何動作
+            if ((stepNumber === 1 && !step1Header.classList.contains('clickable')) || 
+                (stepNumber === 2 && !step2Header.classList.contains('clickable'))) return;
+
+            // 在切換前，先取消所有可能正在進行中的操作
+            deactivateMapClickSearch();
+
+            const isStep1Click = (stepNumber === 1);
+            const bodyToShow = isStep1Click ? step1Body : step2Body;
+            // const bodyToHide = isStep1Click ? step2Body : step1Body;
+            
+            // 檢查點擊的區塊是否已經是打開的
+            const isAlreadyOpen = !bodyToShow.classList.contains('d-none');
+
+            // 1. 先無條件關閉所有區塊
+            step1Body.classList.add('d-none');
+            step2Body.classList.add('d-none');
+
+            // 2. 如果點擊的區塊原本不是打開的，就把它打開
+            if (!isAlreadyOpen) {
+                bodyToShow.classList.remove('d-none');
+                
+                // 特別處理第一步：展開時，顯示重新確認的介面
+                if (isStep1Click) {
+                    chatInputGroup.classList.add('d-none');
+                    suggestionResult.classList.add('d-none');
+                    restartConfirmation.classList.remove('d-none');
+                }
+            }
+        }
+        
+        /*
         // 返回第一步
         function editStep1() {
-            // 如果科別都還沒選，就沒什麼好編輯的
             if (!selectedDepartment) return;
-            // 顯示第一步的區塊
             step1Body.classList.remove('d-none');
-            
-            // 隱藏對話輸入框和 AI 分析結果，但保留對話紀錄
             chatInputGroup.classList.add('d-none');
             suggestionResult.classList.add('d-none');
-            
-            // 顯示「是否重新開始」的確認選項
             restartConfirmation.classList.remove('d-none');
-
-            // 切換 Header 狀態
             step1Summary.classList.add('d-none');
             step1Header.classList.remove('clickable');
-
-            // 將第二步收合
             step2Body.classList.add('d-none');
-            step2Summary.classList.remove('d-none');
+            if (selectedLocationInfo) step2Summary.classList.remove('d-none');
             step2Header.classList.add('clickable');
         }
 
-        // 【核心修改】取消重新分析，回到第二步
+        // 取消重新分析，回到第二步
         function editStep2() {
             if (!selectedDepartment) return;
             resultSection.classList.add('d-none');
-            // 顯示第一步的區塊
             step1Body.classList.remove('d-none');
-            // 隱藏對話輸入框和 AI 分析結果，但保留對話紀錄
-            //chatInputGroup.classList.add('d-none');
-            //suggestionResult.classList.add('d-none');
-            
-            // 顯示「是否重新開始」的確認選項
-            // restartConfirmation.classList.remove('d-none');
+           
+            // 【新功能】如果結果區是可見的，點擊第二步標題時，只展開第二步，不隱藏結果
+            if (!resultSection.classList.contains('d-none')) {
+                step1Body.classList.add('d-none');
+                step1Summary.classList.remove('d-none');
+                step1Header.classList.add('clickable');
 
+                step2Body.classList.remove('d-none');
+                step2Summary.classList.add('d-none');
+                step2Header.classList.remove('clickable');
+            }
 
-            // 將第二步收合
-            step2Body.classList.add('d-none');
-            step2Summary.classList.remove('d-none');
-            step2Header.classList.add('clickable');
-
-            // 切換 Header 狀態
-            step1Body.classList.add('d-none');
-            step1Summary.classList.add('d-none');
-            step1Header.classList.remove('clickable');
         }
+        */
 
-        // 【核心修改】取消重新分析，回到第二步
+        // 取消重新分析，回到第二步
         function cancelRestart() {
             // 隱藏第一步的區塊
             step1Body.classList.add('d-none');
-            
+            /*
             // 顯示第一步的摘要
             step1Summary.classList.remove('d-none');
             step1Header.classList.add('clickable');
 
-            // 重新展開第二步
-            step2Body.classList.remove('d-none');
-            step2Summary.classList.add('d-none');
-            step2Header.classList.remove('clickable');
+            // 如果已經有地點資訊，就直接回到第二步
+            if (selectedLocationInfo) {
+                step2Body.classList.remove('d-none');
+                step2Summary.classList.add('d-none');
+                step2Header.classList.remove('clickable');
+            }
+            */
         }
         
-        // 【核心修改】確認重新分析
+        // 確認重新分析
         function restartChat() {
             // 重設變數
             currentQuestionIndex = 0;
             userAnswers = [];
             selectedDepartment = null;
-            
+            selectedLocationInfo = '';
+            mapCenterInfo = null;
+
             // 清空畫面
             suggestionResult.innerHTML = '';
             chatWindow.innerHTML = '';
@@ -938,6 +1289,12 @@
             step1Body.classList.remove('d-none');
 
             step2Card.classList.add('disabled');
+            step2Header.classList.remove('clickable');
+            step2Body.classList.remove('d-none');
+            step2Content.classList.add('d-none');
+            step2Instruction.classList.remove('d-none');
+            step2Summary.classList.add('d-none');
+
             resultSection.classList.add('d-none');
 
             // 重新開始對話
@@ -948,7 +1305,7 @@
         // 啟用第二層的函式
         function enableStep2(department) {
             if (!department) {
-                editStep1();
+                // editStep1();
                 return;
             }
             selectedDepartment = department;
@@ -972,6 +1329,7 @@
 
             // 隱藏結果
             resultSection.classList.add('d-none');
+            mapCenterInfo = null;
             step2Card.scrollIntoView({ behavior: 'smooth' });
         }
     </script>

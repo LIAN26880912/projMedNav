@@ -1,41 +1,50 @@
-/* 【核心修改】使用 CSS 變數來定義顏色主題 */
+/* 使用 CSS 變數來定義顏色主題 */
 :root {
     --bg-color: #f8f9fa;
     --text-color: #212529;
     --secondary-text-color: #6c757d;
     --card-bg: #ffffff;
+    --card-bg-rgb: 255, 255, 255; /* 【修正】新增 RGB 格式的背景色 */
     --card-border-color: rgba(0, 0, 0, 0.175);
     --input-bg: #fff;
     --input-border-color: #ced4da;
     --input-text-color: #495057;
     --list-group-item-bg: #fff;
     --list-group-item-hover-bg: #e9ecef;
+    --list-item-highlight-bg: #dbeafe; /* 【新功能】列表高亮背景色 */
     --bot-message-bg: #e9ecef;
     --bot-message-text-color: #212529;
     --header-bg: #f7f7f7;
-    --map-filter: none;
+    --link-color: #0d6efd;
 }
 
 body.dark-mode {
     --bg-color: #121212;
     --text-color: #f5f5f5;
-    /* 【調整】提高主要文字亮度，接近純白 */
+    /* 提高主要文字亮度，接近純白 */
     --secondary-text-color: #adb5bd;
     /* 深色模式下的次要文字顏色 */
     --card-bg: #1e1e1e;
+    --card-bg-rgb: 30, 30, 30; /* 【修正】新增 RGB 格式的背景色 */
     --card-border-color: rgba(255, 255, 255, 0.125);
     --input-bg: #2a2a2a;
     --input-border-color: #444;
     --input-text-color: #f5f5f5;
-    /* 【調整】提高輸入框文字亮度 */
+    /* 提高輸入框文字亮度 */
     --list-group-item-bg: #1e1e1e;
     --list-group-item-hover-bg: #333;
+    --list-item-highlight-bg: #2563eb; /* 【新功能】深色模式列表高亮背景色 */
     --bot-message-bg: #3a3a3a;
-    /* 【調整】稍微調亮機器人對話框背景色，增加區隔 */
+    /* 稍微調亮機器人對話框背景色，增加區隔 */
     --bot-message-text-color: #f5f5f5;
-    /* 【調整】確保機器人對話文字清晰 */
+    /* 確保機器人對話文字清晰 */
     --header-bg: #1e1e1e;
-    --map-filter: brightness(0.6) invert(1) contrast(3) hue-rotate(200deg) saturate(0.3) brightness(0.7);
+    --link-color: #4dabf7; /* 深色模式下使用亮藍色連結 */
+}
+
+/* --- 全域樣式 --- */
+*, *::before, *::after {
+    box-sizing: border-box; /* 讓排版更直觀 */
 }
 
 body {
@@ -45,8 +54,19 @@ body {
     color: var(--text-color);
     transition: background-color 0.3s, color 0.3s;
     -webkit-text-size-adjust: 100%; /* 防止 iPhone 橫向時自動放大字體 */
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft JhengHei", Roboto, "Helvetica Neue", Arial, sans-serif; /* 更現代的字體堆疊 */
 }
 
+a {
+    color: var(--link-color); /* 全域連結顏色 */
+}
+a:hover {
+    color: var(--link-color);
+    opacity: 0.8;
+}
+
+
+/* --- 卡片與表單 --- */
 .card {
     background-color: var(--card-bg);
     border-color: var(--card-border-color);
@@ -56,21 +76,14 @@ body {
     background-color: var(--header-bg);
     border-bottom-color: var(--card-border-color);
     color: var(--text-color);
-    /* 【新增】確保 Header 文字顏色跟隨主題 */
+    transition: background-color 0.2s ease-in-out;
 }
 
-/* 【新增】確保重新確認的文字顏色能跟隨主題 */
-#restart-confirmation {
-    color: var(--text-color);
+.card-header.clickable {
+    cursor: pointer;
 }
 
-.list-group-item {
-    background-color: var(--list-group-item-bg);
-    color: var(--text-color);
-    border-color: var(--card-border-color);
-}
-
-.list-group-item:hover {
+.card-header.clickable:hover {
     background-color: var(--list-group-item-hover-bg);
 }
 
@@ -94,20 +107,9 @@ body {
     box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
 }
 
-#map {
-    height: 450px;
-}
-
-.map-click-mode {
-    cursor: crosshair !important;
-}
-
-.card-header.clickable {
-    cursor: pointer;
-}
-
-.card-header.clickable:hover {
-    background-color: var(--list-group-item-hover-bg);
+/* 【新功能】讓選項標題顏色跟隨主題 */
+.step-label {
+    color: var(--text-color);
 }
 
 #step2-card.disabled {
@@ -115,45 +117,13 @@ body {
     pointer-events: none;
 }
 
-.clinic-item-details {
-    font-size: 0.9rem;
-    color: var(--secondary-text-color);
-    /* 使用變數 */
-}
-
-.clinic-item-details a {
-    text-decoration: none;
-    color: #0d6efd;
-}
-
-.clinic-item-details a:hover {
-    text-decoration: underline;
-}
-
-.clinic-item-details .fa-solid {
-    margin-right: 0.4rem;
-}
-
-.leaflet-popup-content-wrapper,
-.leaflet-popup-tip {
-    background: var(--card-bg);
+/* 確保重新確認的文字顏色能跟隨主題 */
+#restart-confirmation {
     color: var(--text-color);
 }
 
-.leaflet-popup-content a {
-    text-decoration: none;
-    color: #0d6efd;
-    margin-right: 10px;
-}
 
-.leaflet-popup-content a:hover {
-    text-decoration: underline;
-}
-
-.leaflet-tile-pane {
-    filter: var(--map-filter);
-}
-
+/* --- 智慧問答 (Chat) --- */
 #chat-window {
     height: 300px;
     overflow-y: auto;
@@ -167,6 +137,7 @@ body {
 .chat-message {
     margin-bottom: 1rem;
     display: flex;
+    align-items: flex-end; /* 圖示與對話框底部對齊 */    
 }
 
 .bot-message .message-bubble {
@@ -175,7 +146,7 @@ body {
     /* 明確指定文字顏色 */
     border-radius: 15px 15px 15px 0;
     padding: 0.75rem 1rem;
-    max-width: 80%;
+    max-width: 85%;
 }
 
 .user-message {
@@ -187,7 +158,7 @@ body {
     color: white;
     border-radius: 15px 15px 0 15px;
     padding: 0.75rem 1rem;
-    max-width: 80%;
+    max-width: 85%;
 }
 
 .message-icon {
@@ -202,9 +173,14 @@ body {
     color: #adb5bd;
 }
 
+.typing-indicator-container {
+    align-items: center;
+}
+
 .typing-indicator {
     display: flex;
     align-items: center;
+    padding: 0.75rem 1rem; /* 讓大小與對話框一致 */    
 }
 
 .typing-indicator span {
@@ -227,90 +203,104 @@ body {
 }
 
 @keyframes typing {
-    0% {
-        opacity: 0.4;
-    }
+    0%  { opacity: 0.4; }
 
-    20% {
-        opacity: 1;
-    }
+    20% { opacity: 1; }
 
-    100% {
-        opacity: 0.4;
-    }
+    100% { opacity: 0.4; }
 }
 
-#theme-toggle {
-    position: fixed;
-    top: 1rem;
-    right: 1rem;
-    z-index: 1000;
+/* --- 結果列表 --- */
+.list-group-item {
+    background-color: var(--list-group-item-bg);
+    color: var(--text-color);
+    border-color: var(--card-border-color);
     cursor: pointer;
-    background-color: var(--card-bg);
-    border-radius: 50%;
-    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
-    /* 【核心修改】固定大小並讓圖示置中 */
-    width: 45px;
-    height: 45px;
-    display: flex;
-    justify-content: center;
+    transition: background-color 0.2s ease-in-out;
+}
+
+.list-group-item:hover {
+    background-color: var(--list-group-item-hover-bg);
+}
+/* 【新功能】列表項目高亮效果 */
+.list-group-item.list-item-highlight {
+    background-color: var(--list-item-highlight-bg);
+}
+
+/* 【列表項目優化】 使用 Flexbox 確保對齊 */
+.list-group-item .d-flex {
+    align-items: flex-start; /* 頂部對齊 */
+}
+.list-group-item h5 {
+    flex-grow: 1; /* 讓標題佔據多餘空間 */
+    margin-right: 1rem; /* 與右側距離文字保持間距 */
+    display: flex; /* 讓燈號和文字對齊 */
     align-items: center;
-    font-size: 1.25rem;
-    /* 微調圖示大小 */
 }
-
-.fa-sun {
-    color: #f39c12;
+.distance-text {
+    color: var(--secondary-text-color);
+    white-space: nowrap; /* 避免距離換行 */
 }
-
-.fa-moon {
-    color: #f1c40f;
-}
-/* 【新增】不同類型圖標的樣式 */
-.custom-div-icon {
-    text-align: center;
-    line-height: 30px;
-    border-radius: 50%;
-    box-shadow: 0 2px 5px rgba(0,0,0,0.4);
-    transition: transform 0.2s ease-in-out;
-}
-.custom-div-icon:hover {
-    transform: scale(1.2);
-}
-.custom-div-icon i {
-    color: white;
-}
-.icon-medical-center { background-color: #8E44AD; } /* 紫色 - 醫學中心 */
-.icon-regional-hospital { background-color: #2980B9; } /* 藍色 - 區域醫院 */
-.icon-district-hospital { background-color: #27AE60; } /* 綠色 - 地區醫院 */
-.icon-clinic { background-color: #d35400; } /* 橘色 - 基層院所 */
-
-.icon-closed {
-    background-color: #7f8c8d !important; /* 灰色 - 休息中 */
-    opacity: 0.7;
-}
-
-/* 【新增】列表中的看診狀態圓點 */
 .status-dot {
+    /*
     display: inline-block;
     width: 12px;
     height: 12px;
     border-radius: 50%;
+    vertical-align: middle; 
+    */
     margin-right: 8px;
-    vertical-align: middle;
+    flex-shrink: 0; /* 防止燈號被壓縮 */
 }
 .status-dot.open {
-    background-color: #2ecc71; /* 綠色 */
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background-color: #2ecc71;
     box-shadow: 0 0 5px #2ecc71;
 }
 .status-dot.closed {
-    background-color: #95a5a6; /* 灰色 */
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background-color: #95a5a6;
 }
-.distance-text {
-    color: var(--secondary-text-color);
+/* 【新功能】無資料狀態的燈號 */
+.status-dot.no-data {
+    color: #95a5a6;
+    font-size: 1.1rem; /* 調整問號圖示大小 */
+    line-height: 1;
 }
 
-/* 【新增】服務時段表格樣式 */
+.clinic-item-details {
+    font-size: 0.9rem;
+    color: var(--secondary-text-color);
+    margin-top: 0.25rem; /* 與上方標題的間距 */
+}
+
+.clinic-item-details p {
+    margin-bottom: 0.25rem !important; /* 減少段落間距 */
+}
+
+.clinic-item-details a {
+    text-decoration: none;
+    color: var(--link-color); /* 使用變數確保顏色一致 */
+}
+
+.clinic-item-details a:hover {
+    text-decoration: underline;
+}
+
+.clinic-item-details .fa-solid {
+    margin-right: 0.5rem;
+    width: 1.2em; /* 讓圖示佔據固定寬度，使文字對齊 */
+    text-align: center;
+}
+
+
+/* 服務時段表格 */
 .service-hours-container {
     margin-top: 0.75rem;
     padding-top: 0.75rem;
@@ -326,18 +316,167 @@ body {
 }
 .service-hours-table thead th {
     color: var(--secondary-text-color);
+    font-weight: normal;
 }
 .service-hours-table td.open {
     color: #2ecc71;
     font-weight: bold;
 }
+/* 【新功能】服務時段表中，無資料的問號樣式 */
+.service-hours-table td.no-data-text {
+    color: var(--secondary-text-color);
+    font-weight: normal;
+    font-style: italic;
+}
+
+#map {
+    height: 450px;
+    border-radius: 0.375rem; /* 圓角 */
+}
+
+.map-click-mode {
+    cursor: crosshair !important;
+}
+
+#map-container {
+    position: relative;
+}
+
+#map-controls-container {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    z-index: 401;
+    /* 【修正】使用定義好的 --card-bg-rgb 變數 */
+    background: rgba(var(--card-bg-rgb), 0.9);
+    backdrop-filter: blur(2px); /* 毛玻璃效果 */
+    padding: 5px 10px;
+    border-radius: 5px;
+    box-shadow: 0 1px 5px rgba(0,0,0,0.4);
+    display: flex;
+    align-items: center;
+    border: 1px solid var(--card-border-color);
+}
+
+#map-controls-container label {
+    margin-right: 8px;
+    font-size: 0.85rem;
+    white-space: nowrap;
+}
+
+#map-style-select {
+    width: auto;
+}
+
+/* 【地圖優化】僅在需要時套用深色濾鏡 */
+.leaflet-tile-pane.map-force-dark {
+    filter: brightness(0.6) invert(1) contrast(3) hue-rotate(200deg) saturate(0.3) brightness(0.7);
+}
+
+/* Leaflet Popup 樣式 */
+.leaflet-popup-content-wrapper,
+.leaflet-popup-tip {
+    background: var(--card-bg);
+    color: var(--text-color);
+    box-shadow: 0 3px 14px rgba(0,0,0,0.4);    
+}
+
+/* 【新功能】讓 Popup 標題可點擊 */
+.popup-title {
+    cursor: pointer;
+    font-weight: bold;
+}
+.popup-title:hover {
+    color: var(--link-color);
+}
+
+/* 【Popup 優化】讓連結更像按鈕 */
+.leaflet-popup-content a {
+    text-decoration: none;
+    color: var(--link-color);
+    margin-right: 10px;
+    padding: 4px 8px;
+    border-radius: 4px;
+    transition: background-color 0.2s;
+}
+
+.leaflet-popup-content a:hover {
+    background-color: var(--list-group-item-hover-bg);
+    color: var(--link-color);
+    opacity: 1;
+}
+
+.popup-status-open { color: #2ecc71; font-weight: bold; }
+.popup-status-closed { color: var(--secondary-text-color); }
+/* 【新功能】Popup 中無資料的狀態文字 */
+.popup-status-no-data { color: var(--secondary-text-color); font-style: italic; }
+
+
+/* --- 自訂地圖圖標 --- */
+.custom-div-icon {
+    border-radius: 50%;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.4);
+    transition: transform 0.2s ease-in-out, box-shadow 0.2s, filter 0.2s;
+    border: 2px solid rgba(255,255,255,0.7);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+.custom-div-icon:hover {
+    transform: scale(1.2);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.5);
+}
+/* 【修改】讓圖示大小根據父層大小自動調整 */
+.custom-div-icon i {
+    color: white;
+}
+
+.icon-medical-center { background-color: #8E44AD; } /* 紫色 - 醫學中心 */
+.icon-regional-hospital { background-color: #2980B9; } /* 藍色 - 區域醫院 */
+.icon-district-hospital { background-color: #27AE60; } /* 綠色 - 地區醫院 */
+.icon-clinic { background-color: #d35400; } /* 橘色 - 基層院所 */
+.icon-user-location { background-color: #0275d8;} /* 新增使用者位置圖標顏色 */
+.icon-closed {
+    filter: grayscale(100%);
+    opacity: 0.7;
+}
+/* 【新功能】無資料狀態的地圖圖標 */
+.icon-no-data {
+    background-color: #505050 !important; /* 使用更深的灰色區別 */
+    opacity: 0.9;
+}
+
+/* --- 主題切換按鈕 --- */
+#theme-toggle {
+    position: fixed;
+    top: 1rem;
+    right: 1rem;
+    z-index: 1000;
+    cursor: pointer;
+    background-color: var(--card-bg);
+    border-radius: 50%;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+    /* 固定大小並讓圖示置中 */
+    width: 45px;
+    height: 45px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 1.25rem;
+    border: 1px solid var(--card-border-color);
+    transition: transform 0.2s;
+}
+#theme-toggle:hover {
+    transform: scale(1.1);
+}
+.fa-sun { color: #f39c12; }
+.fa-moon { color: #f1c40f; }
 
 /* RWD 響應式設計調整 */
 @media (max-width: 768px) {
     body {
         padding-top: 1rem;
         padding-bottom: 1rem;
-        font-size: 1.1rem; /* 稍微放大基礎字體 */
     }
     
     .container {
@@ -346,15 +485,15 @@ body {
     }
 
     h1 {
-        font-size: 1.8rem; /* 縮小主標題 */
+        font-size: 1.75rem; /* 縮小主標題 */
     }
 
     h3 {
-        font-size: 1.6rem; /* 縮小結果標題 */
+        font-size: 1.5rem; /* 縮小結果標題 */
     }
     
     .card-header.fs-5 {
-        font-size: 1.2rem !important; /* 調整卡片標題字體大小 */
+        font-size: 1.1rem !important; /* 調整卡片標題字體大小 */
         padding: 0.8rem 1rem; /* 增加 Header 的垂直空間 */
     }
 
@@ -364,19 +503,28 @@ body {
 
     /* 放大輸入框與按鈕 */
     .form-control, .form-select, .btn {
-        font-size: 1.1rem;
+        font-size: 1rem;
         padding: 0.6rem 1rem;
     }
 
+    /* 【RWD優化】調整第二步的佈局，確保按鈕間距 */
+    #step2-content .row {
+        gap: 0.5rem 0; /* 行與行之間增加間距 */
+    }
+    #step2-content .col-md-auto, #step2-content .col-md-4 {
+        padding-left: var(--bs-gutter-x, 0.75rem);
+        padding-right: var(--bs-gutter-x, 0.75rem);
+    }
+    
     /* 讓第二步驟中的所有按鈕都變成滿版，並增加間距 */
     #step2-content .btn {
         width: 100%;
-        margin-top: 0.5rem;
     }
 
-    /* 確保地址輸入框與按鈕能正確堆疊 */
-    #step2-content .row > div {
-        padding-bottom: 0.5rem;
+    /* 讓地址搜尋的按鈕跟在輸入框旁邊，而不是單獨一行 */
+    #address-input {
+        width: 100%;
+        margin-bottom: 0.5rem;
     }
 
     #chat-window {
@@ -394,5 +542,13 @@ body {
         font-size: 1.2rem;
         top: 0.5rem;
         right: 0.5rem;
+    }    /* 確保地址輸入框與按鈕能正確堆疊 */
+    
+    /* 【修正】讓地圖控制器在窄版面可以換行 */
+    #map-controls-container {
+        flex-wrap: wrap;
+        gap: 5px; /* 增加項目間距 */
     }
+
+
 }
