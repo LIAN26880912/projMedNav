@@ -83,7 +83,14 @@
         <div id="result-section" class="d-none">
             <hr>
             <h3 class="mb-3">搜尋結果</h3>
-            <div id="map"></div>
+            <!-- 將地圖與控制器包裝在一個容器中 -->
+            <div id="map-container">
+                <div id="map-controls-container">
+                    <label for="map-style-select">地圖樣式:</label>
+                    <select id="map-style-select" class="form-select form-select-sm"></select>
+                </div>
+                <div id="map"></div>
+            </div>
             <ul id="clinic-list" class="list-group mt-3 mb-5"></ul>
         </div>
     </div>
@@ -103,6 +110,48 @@
         let selectedDepartment = null, selectedLocationInfo = '';
         const markerClusterGroup = L.markerClusterGroup({ maxClusterRadius: 10 });
         let clinicMarkers = [];
+
+        // 【核心修改】新增地圖底圖相關變數
+        let currentTileLayer = null;
+        const tileLayers = {
+            cartoLight: {
+                name: 'CartoDB 亮色',
+                url: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
+                options: {
+                    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+                    subdomains: 'abcd',
+                    maxZoom: 20
+                },
+                isDark: false // 標記為亮色底圖
+            },
+            cartoDark: {
+                name: 'CartoDB 暗色',
+                url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+                options: {
+                    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+                    subdomains: 'abcd',
+                    maxZoom: 20
+                },
+                isDark: true // 標記為暗色底圖
+            },
+            osm: {
+                name: '標準 (OSM)',
+                url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+                options: {
+                    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                },
+                isDark: false
+            },
+            // 【修正】替換失效的 Stamen Toner
+            hot: {
+                name: '高對比 (HOT)',
+                url: 'https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png',
+                options: {
+                    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, Tiles style by <a href="https://www.hotosm.org/" target="_blank">HOT</a>'
+                },
+                isDark: false
+            }
+        };
 
         // --- DOM 元素 ---
         const themeToggle = document.getElementById('theme-toggle');
@@ -174,14 +223,13 @@
             if (e.key === 'Enter') handleUserMessage();
         });
 
+
+        // 切換主題 
         document.addEventListener('DOMContentLoaded', function() {
             // loadDepartments();
             loadDistricts();
             startChat();
-        });
 
-        // 切換主題 
-        document.addEventListener('DOMContentLoaded', function() {
             // 【新增】檢查並應用儲存的主題
             const savedTheme = localStorage.getItem('theme');
             if (savedTheme === 'dark') {
@@ -192,15 +240,24 @@
             }
         });
 
-        // 【新增】主題切換事件監聽
+        // 主題切換事件監聽
         themeToggle.addEventListener('click', () => {
             document.body.classList.toggle('dark-mode');
+            const mapStyleSelect = document.getElementById('map-style-select');
             if (document.body.classList.contains('dark-mode')) {
                 localStorage.setItem('theme', 'dark');
                 themeToggle.innerHTML = '<i class="fas fa-moon"></i>';
+                if (map) { // 確保地圖已初始化
+                    changeMapLayer('cartoDark');
+                    mapStyleSelect.value = 'cartoDark';
+                }
             } else {
                 localStorage.setItem('theme', 'light');
                 themeToggle.innerHTML = '<i class="fas fa-sun"></i>';
+                if (map) {
+                    changeMapLayer('cartoLight');
+                    mapStyleSelect.value = 'cartoLight';
+                }
             }
         });
         
@@ -414,10 +471,52 @@
         function initializeMap() {
             if (!map) {
                 map = L.map('map').setView([25.033, 121.565], 11);
-                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' }).addTo(map);
+
+                // 設定地圖樣式選擇器
+                const mapStyleSelect = document.getElementById('map-style-select');
+                for (const styleKey in tileLayers) {
+                    const option = document.createElement('option');
+                    option.value = styleKey;
+                    option.textContent = tileLayers[styleKey].name;
+                    mapStyleSelect.appendChild(option);
+                }
+
+                // 監聽選擇器的變更事件
+                mapStyleSelect.addEventListener('change', (e) => {
+                    changeMapLayer(e.target.value);
+                });
+
+                // 根據當前主題設定初始圖層
+                const currentTheme = document.body.classList.contains('dark-mode') ? 'dark' : 'light';
+                const initialLayerKey = currentTheme === 'dark' ? 'cartoDark' : 'cartoLight';
+                changeMapLayer(initialLayerKey);
+                mapStyleSelect.value = initialLayerKey;
+
+                // L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' }).addTo(map);
                 // 【修改】將 markerClusterGroup 加入地圖
                 map.addLayer(markerClusterGroup);
                 userMarkerLayer = L.featureGroup().addTo(map);
+            }
+        }
+
+
+        //切換地圖底圖，並智能判斷是否套用濾鏡
+        function changeMapLayer(layerKey) {
+            if (currentTileLayer) {
+                map.removeLayer(currentTileLayer);
+            }
+            const layerInfo = tileLayers[layerKey];
+            currentTileLayer = L.tileLayer(layerInfo.url, layerInfo.options);
+            currentTileLayer.addTo(map);
+
+            // 智能判斷是否需要套用CSS濾鏡
+            const tilePane = currentTileLayer.getContainer();
+            if (document.body.classList.contains('dark-mode') && !layerInfo.isDark) {
+                // 如果是暗黑模式，且地圖本身不是暗色系，則套用濾鏡
+                tilePane.classList.add('map-force-dark');
+            } else {
+                // 其他情況則移除濾鏡
+                tilePane.classList.remove('map-force-dark');
             }
         }
         
@@ -775,7 +874,7 @@
                             <small class="distance-text">${distanceText}</small>
                         </div>
                         <div class="clinic-item-details">
-                            <p class="mb-1"><i class="fa-solid fa-location-dot"></i> <a href="..." target="_blank">${clinic.地址}</a></p>
+                            <p class="mb-1"><i class="fa-solid fa-location-dot"></i> <a href="${googleMapSearchName}" target="_blank">${clinic.地址}</a></p>
                             <p class="mb-1"><i class="fa-solid fa-phone"></i> ${clinic.電話 ? `<a href="tel:${clinic.電話}">${clinic.電話}</a>` : '未提供'}</p>
                             <p class="mb-1"><i class="fa-solid fa-hospital"></i> ${clinic['特約類別_描述'] || '未分類'}</p>
                         </div>

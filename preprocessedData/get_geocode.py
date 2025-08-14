@@ -24,7 +24,7 @@ API_KEY = os.getenv("API_KEY")
 GEOCODE_API_URL = "https://maps.googleapis.com/maps/api/geocode/json"
 inputFilename = '醫療機構與人員基本資料_20231231.csv'
 outputFilename = '../backend/medical_data_geocoded.csv'
-processArea = '臺北市南港區'
+processArea = '新北市'
 
 
 def get_geocode():

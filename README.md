@@ -2,12 +2,15 @@
 ## Deployment
 <https://mednav.sunhow123.cc>
 
+
 ## TODO
 ### current problem list
-- 那個gemini API 一開始有時候會503, 再觀察一下
+- sytle 要調整。
+- 要再加一個回到本地
 - 急診的服務時間要再加上
 - 地址按下去會壞掉
 - 有些院所的時間不會顯示，怪怪的
+- 部屬上去之後的列表css 好像掛了，再檢查一下
 
 ### function (list by priority)
 - 營業時間
