@@ -5,7 +5,7 @@
     <!-- 加入這行來告訴手機瀏覽器如何正確縮放頁面 -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-    <title>找醫生 - 智慧醫療導航</title>
+    <title>找醫生 - 您的專屬就醫羅盤</title>
 
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
@@ -24,7 +24,9 @@
     </div>
 
     <div class="container">
-        <h1 class="mb-4 text-center">找醫生 - 智慧醫療導航</h1>
+        <div id="logo-container" class="text-center mb-4">
+            <img id="main-logo" src="麥納0818_龜龜Mednav.png" alt="MedNav Logo">
+        </div>
 
         <!-- Step 1: Chatbot -->
         <div class="card mb-4" id="step1-card">
@@ -158,6 +160,8 @@
         };
 
         // --- DOM 元素 ---
+        const mainLogo = document.getElementById('main-logo');
+        const logoContainer = document.getElementById('logo-container');
         const themeToggle = document.getElementById('theme-toggle');
         const citySelect = document.getElementById('city-select');
         const districtSelect = document.getElementById('district-select');
@@ -231,6 +235,16 @@
         });
         // 【新功能】監聽地圖置中按鈕
         recenterMapBtn.addEventListener('click', recenterMap);
+
+        // 【修改】滾動事件監聽，實現平滑動畫並處理覆蓋問題
+        window.addEventListener('scroll', () => {
+            const scrollY = window.scrollY;
+            const animationEndScroll = 150; 
+            const progress = Math.min(scrollY / animationEndScroll, 1);
+
+            // 只更新 CSS 變數，讓 CSS 去處理動畫和排版
+            document.documentElement.style.setProperty('--logo-scroll-progress', progress);
+        });
 
         // --- 初始化函式 ---
         function onPageLoad() {
@@ -375,7 +389,7 @@
             const typingElement = document.createElement('div');
             typingElement.className = 'chat-message bot-message typing-indicator-container';
             typingElement.innerHTML = `
-                <i class="fa-solid fa-robot message-icon"></i>
+                <img src="麥納0818_麥納烏龜頭貼.png" alt="Bot Avatar" class="bot-avatar message-icon">
                 <div class="message-bubble typing-indicator">
                     <span></span><span></span><span></span>
                 </div>
@@ -394,7 +408,7 @@
             const messageElement = document.createElement('div');
             messageElement.className = 'chat-message bot-message';
             messageElement.innerHTML = `
-                <i class="fa-solid fa-robot message-icon"></i>
+                <img src="麥納0818_麥納烏龜頭貼.png" alt="Bot Avatar" class="bot-avatar message-icon">
                 <div class="message-bubble">${message}</div>
             `;
             chatWindow.appendChild(messageElement);
