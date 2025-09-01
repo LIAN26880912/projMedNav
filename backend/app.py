@@ -8,7 +8,14 @@ import requests
 import os
 from dotenv import load_dotenv
 
-from gemini_api import call_gemini_for_suggestion, call_gemini_for_validation
+from mcp_api import (
+    call_gemini_for_symptom_extraction, 
+    get_expert_suggestion_from_gemini_pro,
+    validate_user_input_with_gemini,
+    generate_followup_question,   # <--- 補上這行
+    multiagent_expert_suggestion
+)
+
 
 nlp = False
  
@@ -26,7 +33,7 @@ CORS(app, origins = origins)
 app.config['JSON_AS_ASCII'] = False
 
 load_dotenv()  
-API_KEY = os.getenv("API_KEY")
+GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 GEOCODE_API_URL = "https://maps.googleapis.com/maps/api/geocode/json"
 # GEMINI_API_URL = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key={API_KEY}"
 
@@ -95,7 +102,7 @@ def get_geocode_from_google(address):
     """從 Google API 取得地址的經緯度"""
     if not address:
         return None
-    params = {'address': address, 'key': API_KEY, 'language': 'zh-TW'}
+    params = {'address': address, 'key': GOOGLE_API_KEY, 'language': 'zh-TW'}
     try:
         res = requests.get(GEOCODE_API_URL, params=params)
         res.raise_for_status()
@@ -141,57 +148,53 @@ def get_all_districts():
         return jsonify({"error": str(e)}), 500
 
 
-@app.route('/api/validate-answer', methods=['POST'])
-def validate_answer():
-    data = request.get_json()
-    question = data.get('question')
-    answer = data.get('answer')
-    if not question or not answer:
-        return jsonify({'error': 'Question and answer are required'}), 400
-
-    # 呼叫 gemini_api 中的新函式
-    validation_result = call_gemini_for_validation(question, answer, API_KEY)
-    return jsonify(validation_result)
-
-
 # 依症狀推薦科別的 API
 @app.route('/api/suggest-department', methods=['POST'])
 def suggest_department():
-    data = request.get_json()
-    symptom_text = data.get('symptoms', '')
-    if not symptom_text:
-        return jsonify({'departments': []})
+    conversation = request.json.get('symptoms')
+    if not conversation:
+        return jsonify({"error": "缺少症狀描述"}), 400
 
-    # --- 層級 0: 緊急狀況判斷 ---
-    for keyword in emergency_keywords:
-        if keyword in symptom_text:
-            print(f"偵測到緊急關鍵字: {keyword}")
-            # 回傳一個特殊的緊急狀態物件
-            return jsonify({"emergency": True, "matched_keyword": keyword})
+    # --- 步驟 1: [控制層] 呼叫 Gemini 進行對話與資訊擷取 ---
+    # 為了簡化，我們先假設一次對話就能完成。
+    # 完整的實作需要處理 is_info_complete 為 false 的情況，進行多輪對話。
+    structured_data = call_gemini_for_symptom_extraction(conversation, GOOGLE_API_KEY)
+    
+    if 'error' in structured_data:
+        return jsonify(structured_data), 500
 
-    # --- 層級 1: 優先使用 symptom_map.json 進行關鍵字匹配 ---
-    found_departments = set()
-    if symptom_map:
-        for symptom_keyword, department in symptom_map.items():
-            if symptom_keyword in symptom_text:
-                found_departments.add(department)
-    if found_departments:
-        # 如果關鍵字匹配到，我們也用 Gemini 的格式回傳，方便前端統一處理
-        print(f"Symptom Map 高優先度分析結果: {list(found_departments)[0]}")
-        return jsonify({
-            "department": list(found_departments)[0],
-            "urgency_level": "可安排門診",
-            "recommendation_reason": "根據症狀關鍵字匹配"
-        })
-    print("關鍵字無匹配，轉交其他模型進行分析...")
+    # --- 步驟 2: [專家層] 呼叫 Hugging Face 模型進行專業判斷 ---
+    expert_suggestion = get_expert_suggestion_from_gemini_pro(structured_data, GOOGLE_API_KEY)
 
-    # --- 層級 2: 如果關鍵字無匹配，且非雲端部屬模式，則使用本地 NLP 模型 ---
+    if 'error' in expert_suggestion:
+        return jsonify(expert_suggestion), 500
 
+    # --- 步驟 3: 回傳最終結果 ---
+    # 將專家建議與結構化資訊合併，方便前端使用或未來除錯
+    final_result = {
+        "source": "MCP_2.0",
+        "suggestion": expert_suggestion,
+        "extracted_data": structured_data
+    }
 
-    # --- 層級 3: 如果本地模型信心度不足，則請求 Gemini 專家分析 ---
-    print("本地 NLP 模型信心度不足，或未使用本地 NLP ，請求 Gemini API 進行分析...")
-    gemini_result = call_gemini_for_suggestion(symptom_text, departments_list, API_KEY)
-    return jsonify(gemini_result)      
+    # expert_suggestion["suggested_departments"] 是陣列
+    # 搜尋所有科別
+    clinics = []
+    for dept in expert_suggestion.get("suggested_departments", []):
+        clinics += search_clinics_by_department(dept)
+
+    return jsonify(final_result) 
+
+@app.route('/api/validate-input', methods=['POST'])
+def validate_input():
+    data = request.json
+    question = data.get('question')
+    answer = data.get('answer')
+    if not question or not answer:
+        return jsonify({"error": "缺少問題或回答"}), 400
+    
+    validation_result = validate_user_input_with_gemini(question, answer, GOOGLE_API_KEY)
+    return jsonify(validation_result)     
 
 
 def get_return_columns():
@@ -208,11 +211,24 @@ def search_clinic():
     city_query = request.args.get('city', '')
     district_query = request.args.get('district', '')
     if df.empty or not department_query or not city_query:
-        return jsonify([{'error': '緯度、經度與半徑必須是有效的數字'}]), 400
+        # 即使 department_query 有值，也可能在下一步變成空列表，所以在此不急著返回錯誤
+        pass # 讓後續邏輯處理
+
+    # --- 新增的科別處理邏輯 ---
+    # 1. 將字串用逗號拆分成列表，並移除多餘的空白
+    department_list = [dept.strip() for dept in department_query.split(',') if dept.strip()]
+    if not department_list:
+        return jsonify([{'error': '科別為必填欄位'}]), 400
+    # 2. 用正規表示式的 "OR" (|) 連接所有科別
+    department_regex = '|'.join(department_list)
+    # --- 結束 ---
 
     full_address_prefix = city_query + district_query
+    
+    # 3. 在查詢中使用新的 regex 變數
     result_df =  df[df['縣市區名'].str.startswith(full_address_prefix, na=False) & 
-                    df['科別'].str.contains(department_query, na=False)].copy()
+                    df['科別'].str.contains(department_regex, na=False, regex=True)].copy()
+
 
     '''
     if not result_df.empty:
@@ -269,16 +285,25 @@ def search_nearby_clinics():
     except (TypeError, ValueError):
         return jsonify([{'error': '緯度、經度與半徑必須是有效的數字'}]), 400
 
-    if df.empty or not department_query:
+    # --- 新增的科別處理邏輯 ---
+    if df.empty:
+        return jsonify([]), 200 # 如果資料是空的，直接回傳空列表
+
+    department_list = [dept.strip() for dept in department_query.split(',') if dept.strip()]
+    if not department_list:
         return jsonify([{'error': '科別為必填欄位'}]), 400
+    department_regex = '|'.join(department_list)
+    # --- 結束 ---
 
     distances = df.apply(
         lambda row: haversine_distance(user_lat, user_lon, row['latitude'], row['longitude']),
         axis=1
     )
 
+    # 在查詢中使用新的 regex 變數
     result_df = df[(distances <= radius_km) & 
-                   (df['科別'].str.contains(department_query, na=False))].copy()
+                   (df['科別'].str.contains(department_regex, na=False, regex=True))].copy()
+
 
     # 依距離排序
     result_df['distance'] = distances[result_df.index]
@@ -312,7 +337,122 @@ def search_nearby_clinics():
     print(f"附近查詢: ({user_lat}, {user_lon}) 半徑 {radius_km}km - {department_query}，找到 {len(clinics)} 筆資料。")
     return jsonify(clinics)
 
- 
+@app.route('/api/dialogue', methods=['POST'])
+def dialogue_manager():
+    conversation_history = request.json.get('conversation_history', '')
+    if not conversation_history:
+        return jsonify({"error": "缺少對話紀錄"}), 400
+
+    # --- 相關性判斷邏輯 (維持不變) ---
+    lines = conversation_history.strip().split('\n')
+    last_user_line = next((line for line in reversed(lines) if line.startswith("使用者:")), None)
+    last_ai_line = next((line for line in reversed(lines) if line.startswith("AI:")), None)
+
+    def is_user_refusal(answer):
+        refusal_keywords = ["沒有", "不知道", "不清楚", "不想回答", "拒絕回答", "略過", "跳過"]
+        return any(k in answer for k in refusal_keywords)
+
+    if last_user_line and last_ai_line:
+        last_answer = last_user_line.replace("使用者: ", "").strip()
+        last_question = last_ai_line.replace("AI: ", "").strip()
+        if not is_user_refusal(last_answer):
+            validation = validate_user_input_with_gemini(last_question, last_answer, GOOGLE_API_KEY)
+            if not validation.get("is_relevant", True):
+                return jsonify({
+                    "action": "ask_more",
+                    "next_question": validation.get("feedback", "抱歉，請針對問題提供資訊喔。"),
+                    "extracted_data": {}
+                })
+    # --- 相關性判斷結束 ---
+
+    # 步驟 1: 症狀抽取
+    structured_data = call_gemini_for_symptom_extraction(conversation_history, GOOGLE_API_KEY)
+    if 'error' in structured_data:
+        return jsonify(structured_data), 500
+    
+    # --- 【主要修改】步驟 2: 呼叫 Multi-agent 進行分診建議 ---
+    multiagent_result = multiagent_expert_suggestion(structured_data, GOOGLE_API_KEY)
+    # 使用融合後的共識 (consensus) 作為主要建議
+    expert_suggestion = multiagent_result.get("consensus", {})
+
+    if not expert_suggestion:
+         # 如果連共識都沒有，可能 multi-agent 執行失敗
+        return jsonify({"error": "Multi-agent 專家系統分析失敗"}), 500
+
+    # 步驟 3: 根據 Multi-agent 結果判斷流程
+    # 緊急判斷：直接給急診指引，結束對話
+    if expert_suggestion.get('urgency_level') == '建議盡快就醫':
+        return jsonify({
+            "action": "emergency",
+            "suggestion": expert_suggestion, # 回傳共識結果
+            "multiagent_full_result": multiagent_result, # 可選擇性回傳完整報告
+            "extracted_data": structured_data
+        })
+
+    # 非緊急：如果個人資訊不完整，繼續追問
+    if not structured_data.get('is_info_complete', True):
+        next_question = generate_followup_question(structured_data, GOOGLE_API_KEY)
+        return jsonify({
+            "action": "ask_more",
+            "next_question": next_question,
+            "extracted_data": structured_data
+        })
+
+    # 非緊急且資訊完整，給分診建議
+    return jsonify({
+        "action": "suggest",
+        "suggestion": expert_suggestion, # 回傳共識結果
+        "multiagent_full_result": multiagent_result, # 可選擇性回傳完整報告
+        "extracted_data": structured_data
+    })
+
+
+
+def search_clinics_by_department(department):
+    """根據科別搜尋所有診所（不分地區）"""
+    if df.empty or not department:
+        return []
+    result_df = df[df['科別'].str.contains(department, na=False)].copy()
+    cols_to_return = get_return_columns()
+    for col in cols_to_return:
+        if col not in result_df.columns:
+            result_df[col] = np.nan
+    result_df = result_df.replace('', np.nan).fillna('未提供')
+    return result_df[cols_to_return].to_dict('records')
+
+
+# --- Multiagent 分診 API 端點 ---
+@app.route('/api/suggest-department-multiagent', methods=['POST'])
+def suggest_department_multiagent():
+    conversation = request.json.get('symptoms')
+    if not conversation:
+        return jsonify({"error": "缺少症狀描述"}), 400
+
+    # 步驟 1: 症狀抽取
+    structured_data = call_gemini_for_symptom_extraction(conversation, GOOGLE_API_KEY)
+    if 'error' in structured_data:
+        return jsonify(structured_data), 500
+
+    # 步驟 2: multi-agent 分診建議
+    multiagent_result = multiagent_expert_suggestion(structured_data, GOOGLE_API_KEY)
+    print("\n=== API Log: /api/suggest-department-multiagent ===")
+    print("[Symptoms]", json.dumps(structured_data, ensure_ascii=False, indent=2))
+    print("[Multiagent Result]", json.dumps(multiagent_result, ensure_ascii=False, indent=2))
+    print("===============================================\n")
+    # 步驟 3: 回傳
+    final_result = {
+        "source": "MCP_2.0_multiagent",
+        "multiagent_suggestion": multiagent_result,
+        "extracted_data": structured_data,
+        "diseaseA": multiagent_result.get("diseaseA", {}),
+        "diseaseB": multiagent_result.get("diseaseB", {})
+    }
+    clinics = []
+    consensus_depts = multiagent_result.get("consensus", {}).get("suggested_departments", [])
+    for dept in consensus_depts:
+        clinics += search_clinics_by_department(dept)
+    final_result["clinics"] = clinics
+    return jsonify(final_result)
 
 # --- 主程式執行區 ---
 if __name__ == '__main__':
